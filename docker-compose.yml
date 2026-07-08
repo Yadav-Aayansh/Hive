@@ -6,7 +6,7 @@ services:
     env_file:
       - ./server/.env
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
 
 volumes:
   pgdata:
