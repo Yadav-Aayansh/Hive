@@ -23,18 +23,11 @@ export class Student {
   @Column({ type: "uuid", name: "college_id" })
   collegeId!: string;
 
-  @OneToOne(() => User, (user) => user.student, { onDelete: "CASCADE" })
-  @JoinColumn([
-    { name: "user_id", referencedColumnName: "id" },
-    { name: "college_id", referencedColumnName: "collegeId" },
-  ])
-  user!: User;
+  @Column({ type: "varchar", length: 40, name: "roll_no", nullable: true })
+  rollNo!: string | null;
 
-  @Column({ type: "varchar", length: 40, name: "roll_no" })
-  rollNo!: string;
-
-  @Column({ type: "varchar", length: 100 })
-  branch!: string;
+  @Column({ type: "varchar", length: 100, nullable: true })
+  branch!: string | null;
 
   @Column({ type: "text", nullable: true })
   bio!: string | null;
@@ -44,6 +37,13 @@ export class Student {
 
   @UpdateDateColumn({ type: "timestamptz" })
   updatedAt!: Date;
+
+  @OneToOne(() => User, (user) => user.student, { onDelete: "CASCADE" })
+  @JoinColumn([
+    { name: "user_id", referencedColumnName: "id" },
+    { name: "college_id", referencedColumnName: "collegeId" },
+  ])
+  user!: User;
 
   @OneToMany(() => ClubMembership, (membership) => membership.student)
   memberships!: ClubMembership[];

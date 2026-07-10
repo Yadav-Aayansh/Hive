@@ -35,25 +35,9 @@ export class ClubMembership {
   @Column({ type: "uuid", name: "club_id" })
   clubId!: string;
 
-  @ManyToOne(() => Club, (club) => club.memberships, { onDelete: "CASCADE" })
-  @JoinColumn([
-    { name: "club_id", referencedColumnName: "id" },
-    { name: "college_id", referencedColumnName: "collegeId" },
-  ])
-  club!: Club;
-
   @Index()
   @Column({ type: "uuid", name: "student_id" })
   studentId!: string;
-
-  @ManyToOne(() => Student, (student) => student.memberships, {
-    onDelete: "CASCADE",
-  })
-  @JoinColumn([
-    { name: "student_id", referencedColumnName: "userId" },
-    { name: "college_id", referencedColumnName: "collegeId" },
-  ])
-  student!: Student;
 
   @Column({ type: "varchar", length: 20, default: "member" })
   role!: MembershipRole;
@@ -66,4 +50,20 @@ export class ClubMembership {
 
   @Column({ type: "timestamptz", name: "decided_at", nullable: true })
   decidedAt!: Date | null;
+
+  @ManyToOne(() => Club, (club) => club.memberships, { onDelete: "CASCADE" })
+  @JoinColumn([
+    { name: "club_id", referencedColumnName: "id" },
+    { name: "college_id", referencedColumnName: "collegeId" },
+  ])
+  club!: Club;
+
+  @ManyToOne(() => Student, (student) => student.memberships, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn([
+    { name: "student_id", referencedColumnName: "userId" },
+    { name: "college_id", referencedColumnName: "collegeId" },
+  ])
+  student!: Student;
 }

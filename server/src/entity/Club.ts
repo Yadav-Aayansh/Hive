@@ -30,12 +30,6 @@ export class Club {
   @Column({ type: "uuid", name: "college_id" })
   collegeId!: string;
 
-  @ManyToOne(() => College, (college) => college.clubs, {
-    onDelete: "RESTRICT",
-  })
-  @JoinColumn({ name: "college_id" })
-  college!: College;
-
   @Column({ type: "varchar", length: 120 })
   name!: string;
 
@@ -62,6 +56,12 @@ export class Club {
 
   @UpdateDateColumn({ type: "timestamptz" })
   updatedAt!: Date;
+
+  @ManyToOne(() => College, (college) => college.clubs, {
+    onDelete: "RESTRICT",
+  })
+  @JoinColumn({ name: "college_id" })
+  college!: College;
 
   @OneToMany(() => ClubMembership, (membership) => membership.club)
   memberships!: ClubMembership[];
