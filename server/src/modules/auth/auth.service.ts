@@ -19,8 +19,7 @@ export interface UserDto {
   fullName: string;
   avatarUrl: string | null;
   role: User["role"];
-  collegeId: string | null;
-  onboarded: boolean;
+  collegeSlug: string | null;
   student: {
     rollNo: string | null;
     branch: string | null;
@@ -28,15 +27,14 @@ export interface UserDto {
   } | null;
 }
 
-function toUserDto(user: User, student: Student | null = null): UserDto {
+function toUserDto(user: User, student: Student | null = null, college: College | null = null): UserDto {
   return {
     id: user.id,
     email: user.email,
     fullName: user.fullName,
     avatarUrl: user.avatarUrl,
     role: user.role,
-    collegeId: user.collegeId,
-    onboarded: user.collegeId !== null,
+    collegeSlug: college?.slug ?? null,
     student: student
       ? { rollNo: student.rollNo, branch: student.branch, bio: student.bio }
       : null,
@@ -107,7 +105,7 @@ export async function signup(
     return { user, student };
   });
 
-  return { user: toUserDto(user, student), issued: await startSession(user) };
+  return { user: toUserDto(user, student, college), issued: await startSession(user) };
 }
 
 export async function login(
@@ -116,6 +114,7 @@ export async function login(
   const user = await AppDataSource.getRepository(User)
     .createQueryBuilder("user")
     .addSelect("user.passwordHash")
+    .leftJoinAndSelect("user.college", "college")
     .where("user.email = :email", { email: input.email })
     .getOne();
 
@@ -131,7 +130,7 @@ export async function login(
     userId: user.id,
   });
 
-  return { user: toUserDto(user, student), issued: await startSession(user) };
+  return { user: toUserDto(user, student, user.college), issued: await startSession(user) };
 }
 
 export async function logout(userId: string, jti: string): Promise<void> {
@@ -139,7 +138,11 @@ export async function logout(userId: string, jti: string): Promise<void> {
 }
 
 export async function getCurrentUser(userId: string): Promise<UserDto> {
-  const user = await AppDataSource.getRepository(User).findOneBy({ id: userId });
+  const user = await AppDataSource.getRepository(User)
+    .createQueryBuilder("user")
+    .leftJoinAndSelect("user.college", "college")
+    .where("user.id = :id", { id: userId })
+    .getOne();
 
   if (!user) {
     throw new UnauthenticatedError("Account no longer exists");
@@ -149,5 +152,5 @@ export async function getCurrentUser(userId: string): Promise<UserDto> {
     userId,
   });
 
-  return toUserDto(user, student);
+  return toUserDto(user, student, user.college);
 }
