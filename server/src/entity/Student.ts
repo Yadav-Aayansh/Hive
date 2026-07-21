@@ -14,6 +14,10 @@ import { ClubMembership } from "./ClubMembership";
 import { User } from "./User";
 
 @Unique("uq_students_user_college", ["userId", "collegeId"])
+@Index("uq_students_college_roll", ["collegeId", "rollNo"], {
+  unique: true,
+  where: `"roll_no" IS NOT NULL`,
+})
 @Entity("students")
 export class Student {
   @PrimaryColumn({ type: "uuid", name: "user_id" })

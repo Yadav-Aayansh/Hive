@@ -35,14 +35,21 @@ export class User {
   @Column({ type: "varchar", length: 190, unique: true })
   email!: string;
 
-  @Column({ type: "varchar", length: 255, name: "password_hash", select: false })
+  @Column({
+    type: "varchar",
+    length: 255,
+    name: "password_hash",
+    select: false,
+  })
   passwordHash!: string;
 
   @Column({ type: "varchar", length: 120, name: "full_name" })
   fullName!: string;
 
-  @Column({ type: "text", name: "avatar_url", nullable: true })
-  avatarUrl!: string | null;
+  // R2 object key, not a URL -- the bucket domain is resolved when building
+  // the response so it can change without a migration.
+  @Column({ type: "varchar", length: 255, name: "avatar_key", nullable: true })
+  avatarKey!: string | null;
 
   @Column({ type: "varchar", length: 20 })
   role!: UserRole;
