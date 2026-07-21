@@ -30,6 +30,10 @@ export class College {
   @Column({ type: "varchar", length: 60, unique: true })
   slug!: string;
 
+  // R2 object key, not a URL. See User.avatarKey.
+  @Column({ type: "varchar", length: 255, name: "logo_key", nullable: true })
+  logoKey!: string | null;
+
   @Column({ type: "varchar", length: 20, default: "pending" })
   status!: CollegeStatus;
 
