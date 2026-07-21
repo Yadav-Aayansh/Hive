@@ -3,7 +3,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -13,6 +12,7 @@ import {
 } from "typeorm";
 import { ClubMembership } from "./ClubMembership";
 import { College } from "./College";
+import { Event } from "./Event";
 
 export type ClubType = "official" | "unofficial";
 export type ClubStatus = "pending" | "approved" | "rejected";
@@ -21,12 +21,12 @@ export type ClubStatus = "pending" | "approved" | "rejected";
 @Unique("uq_clubs_id_college", ["id", "collegeId"])
 @Check(`"type" IN ('official', 'unofficial')`)
 @Check(`"status" IN ('pending', 'approved', 'rejected')`)
+@Check(`"type" = 'official' OR "status" = 'approved'`)
 @Entity("clubs")
 export class Club {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Index()
   @Column({ type: "uuid", name: "college_id" })
   collegeId!: string;
 
@@ -42,13 +42,15 @@ export class Club {
   @Column({ type: "text", nullable: true })
   description!: string | null;
 
-  @Column({ type: "text", name: "logo_url", nullable: true })
-  logoUrl!: string | null;
+  // R2 object key, not a URL. See User.avatarKey.
+  @Column({ type: "varchar", length: 255, name: "logo_key", nullable: true })
+  logoKey!: string | null;
 
   @Column({ type: "varchar", length: 20, default: "unofficial" })
   type!: ClubType;
 
-  @Column({ type: "varchar", length: 20, default: "pending" })
+  // No default: the valid value depends on `type`, so the service sets it.
+  @Column({ type: "varchar", length: 20 })
   status!: ClubStatus;
 
   @CreateDateColumn({ type: "timestamptz" })
@@ -65,4 +67,7 @@ export class Club {
 
   @OneToMany(() => ClubMembership, (membership) => membership.club)
   memberships!: ClubMembership[];
+
+  @OneToMany(() => Event, (event) => event.club)
+  events!: Event[];
 }

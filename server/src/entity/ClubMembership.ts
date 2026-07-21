@@ -31,7 +31,6 @@ export class ClubMembership {
   @Column({ type: "uuid", name: "college_id" })
   collegeId!: string;
 
-  @Index()
   @Column({ type: "uuid", name: "club_id" })
   clubId!: string;
 
