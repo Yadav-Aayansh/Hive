@@ -1,8 +1,13 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
+import { Announcement } from "../entity/Announcement";
+import { Certificate } from "../entity/Certificate";
 import { Club } from "../entity/Club";
 import { ClubMembership } from "../entity/ClubMembership";
 import { College } from "../entity/College";
+import { Event } from "../entity/Event";
+import { EventRegistration } from "../entity/EventRegistration";
+import { Notification } from "../entity/Notification";
 import { Student } from "../entity/Student";
 import { User } from "../entity/User";
 import { env } from "./env";
@@ -14,7 +19,18 @@ export const AppDataSource = new DataSource({
   username: env.POSTGRES_USER,
   password: env.POSTGRES_PASSWORD,
   database: env.POSTGRES_DB,
-  entities: [User, Student, College, Club, ClubMembership],
+  entities: [
+    User,
+    Student,
+    College,
+    Club,
+    ClubMembership,
+    Event,
+    EventRegistration,
+    Certificate,
+    Announcement,
+    Notification,
+  ],
   synchronize: true,
   logging: false,
 });
