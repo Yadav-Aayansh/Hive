@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { MulterError } from "multer";
 import { logger } from "../config/logger";
 import { AppError } from "../utils/AppError";
 import { sendError } from "../utils/response";
@@ -27,6 +28,17 @@ export function errorHandler(
       logger.error({ err }, err.message);
     }
     return sendError(res, err.statusCode, err.code, err.message, err.details);
+  }
+
+  if (err instanceof MulterError) {
+    const message =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "File must be 5MB or smaller"
+        : "Invalid file upload";
+
+    return sendError(res, 400, "VALIDATION_ERROR", message, [
+      { field: err.field ?? "file", message },
+    ]);
   }
 
   logger.error({ err }, "Unhandled error");
