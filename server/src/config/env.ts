@@ -2,9 +2,7 @@ import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "production"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
 
   POSTGRES_HOST: z.string().min(1),
@@ -21,6 +19,12 @@ const envSchema = z.object({
   COOKIE_NAME: z.string().min(1).default("hive_token"),
 
   CORS_ORIGIN: z.string().min(1).default("http://localhost:5173"),
+
+  R2_ACCOUNT_ID: z.string().min(1),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
+  R2_BUCKET_NAME: z.string().min(1),
+  R2_PUBLIC_URL: z.url().transform((value) => value.replace(/\/+$/, "")),
 });
 
 const parsed = envSchema.safeParse(process.env);
