@@ -21,8 +21,3 @@ export async function logout(req: Request, res: Response) {
   clearAuthCookie(res);
   return sendSuccess(res, { message: "Signed out" });
 }
-
-export async function me(req: Request, res: Response) {
-  const user = await authService.getCurrentUser(req.user!.id);
-  return sendSuccess(res, { user });
-}

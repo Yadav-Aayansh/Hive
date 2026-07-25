@@ -8,38 +8,15 @@ import {
   ValidationError,
 } from "../../utils/AppError";
 import { domainOf } from "../../utils/email";
-import { TOKEN_TTL_SECONDS, signToken, type IssuedToken } from "../../utils/jwt";
+import {
+  TOKEN_TTL_SECONDS,
+  signToken,
+  type IssuedToken,
+} from "../../utils/jwt";
 import { hashPassword, verifyPassword } from "../../utils/password";
 import { createSession, destroySession } from "../../utils/session";
+import { toUserDto, type UserDto } from "../user/user.service";
 import type { LoginInput, SignupInput } from "./auth.schema";
-
-export interface UserDto {
-  id: string;
-  email: string;
-  fullName: string;
-  avatarUrl: string | null;
-  role: User["role"];
-  collegeSlug: string | null;
-  student: {
-    rollNo: string | null;
-    branch: string | null;
-    bio: string | null;
-  } | null;
-}
-
-function toUserDto(user: User, student: Student | null = null, college: College | null = null): UserDto {
-  return {
-    id: user.id,
-    email: user.email,
-    fullName: user.fullName,
-    avatarUrl: user.avatarUrl,
-    role: user.role,
-    collegeSlug: college?.slug ?? null,
-    student: student
-      ? { rollNo: student.rollNo, branch: student.branch, bio: student.bio }
-      : null,
-  };
-}
 
 export async function startSession(user: User): Promise<IssuedToken> {
   const issued = signToken({
@@ -105,7 +82,10 @@ export async function signup(
     return { user, student };
   });
 
-  return { user: toUserDto(user, student, college), issued: await startSession(user) };
+  return {
+    user: toUserDto(user, student, college),
+    issued: await startSession(user),
+  };
 }
 
 export async function login(
@@ -130,27 +110,12 @@ export async function login(
     userId: user.id,
   });
 
-  return { user: toUserDto(user, student, user.college), issued: await startSession(user) };
+  return {
+    user: toUserDto(user, student, user.college),
+    issued: await startSession(user),
+  };
 }
 
 export async function logout(userId: string, jti: string): Promise<void> {
   await destroySession(userId, jti);
-}
-
-export async function getCurrentUser(userId: string): Promise<UserDto> {
-  const user = await AppDataSource.getRepository(User)
-    .createQueryBuilder("user")
-    .leftJoinAndSelect("user.college", "college")
-    .where("user.id = :id", { id: userId })
-    .getOne();
-
-  if (!user) {
-    throw new UnauthenticatedError("Account no longer exists");
-  }
-
-  const student = await AppDataSource.getRepository(Student).findOneBy({
-    userId,
-  });
-
-  return toUserDto(user, student, user.college);
 }
