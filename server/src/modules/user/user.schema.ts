@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-// One profile, one payload: `fullName` lives on users and the rest on students,
-// but that split is ours, not the client's.
 export const updateProfileSchema = z
   .object({
     fullName: z.string().trim().min(2).max(120).optional(),
@@ -13,5 +11,7 @@ export const updateProfileSchema = z
   .refine((input) => Object.keys(input).length > 0, {
     message: "Provide at least one field to update",
   });
+
+export const userIdParamSchema = z.object({ id: z.uuid() });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

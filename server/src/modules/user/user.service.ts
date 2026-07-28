@@ -4,6 +4,7 @@ import { Student } from "../../entity/Student";
 import { User } from "../../entity/User";
 import {
   ConflictError,
+  NotFoundError,
   UnauthenticatedError,
   ValidationError,
 } from "../../utils/AppError";
@@ -11,9 +12,15 @@ import { deleteObjectQuietly, objectKey, publicUrl } from "../../utils/storage";
 import { attachUpload } from "../upload/upload.service";
 import type { UpdateProfileInput } from "./user.schema";
 
-// Columns that live on `students`, so a caller without a student row is told
-// rather than silently ignored.
 const STUDENT_FIELDS = ["rollNo", "branch", "bio"] as const;
+
+export interface PublicUserDto {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  branch: string | null;
+  bio: string | null;
+}
 
 export interface UserDto {
   id: string;
@@ -72,6 +79,31 @@ export async function getProfile(userId: string): Promise<UserDto> {
   return toUserDto(user, student, user.college);
 }
 
+export async function getPublicProfile(
+  collegeId: string,
+  userId: string,
+): Promise<PublicUserDto> {
+  const user = await AppDataSource.getRepository(User).findOneBy({
+    id: userId,
+  });
+
+  if (!user || user.collegeId !== collegeId) {
+    throw new NotFoundError("User not found");
+  }
+
+  const student = await AppDataSource.getRepository(Student).findOneBy({
+    userId,
+  });
+
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    avatarUrl: publicUrl(user.avatarKey),
+    branch: student?.branch ?? null,
+    bio: student?.bio ?? null,
+  };
+}
+
 export async function updateProfile(
   userId: string,
   input: UpdateProfileInput,
@@ -92,8 +124,6 @@ export async function updateProfile(
     );
   }
 
-  // The partial unique index would reject this anyway; checking first turns a
-  // driver error into the same shaped response as every other conflict.
   if (student && input.rollNo) {
     const holder = await AppDataSource.getRepository(Student).findOneBy({
       collegeId: student.collegeId,
@@ -107,8 +137,6 @@ export async function updateProfile(
     }
   }
 
-  // Attached before the write so a rejected request never moves an object out
-  // of staging; the old key is dropped only once the new one is committed.
   const avatarKey = input.avatarUploadId
     ? await attachUpload(
         userId,
