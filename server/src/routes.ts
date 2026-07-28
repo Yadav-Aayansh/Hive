@@ -2,6 +2,8 @@ import { Router } from "express";
 import { AppDataSource } from "./config/data-source";
 import { authRouter } from "./modules/auth/auth.routes";
 import { collegeRouter } from "./modules/college/college.routes";
+import { uploadRouter } from "./modules/upload/upload.routes";
+import { userRouter } from "./modules/user/user.routes";
 import { sendSuccess } from "./utils/response";
 
 export const apiRouter = Router();
@@ -15,4 +17,6 @@ apiRouter.get("/health", (_req, res) =>
 );
 
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/users", userRouter);
 apiRouter.use("/colleges", collegeRouter);
+apiRouter.use("/uploads", uploadRouter);
