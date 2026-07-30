@@ -26,7 +26,7 @@ export function validate(schema: ZodType, part: RequestPart = "body") {
         value: result.data,
         configurable: true,
         enumerable: true,
-        writable: false,
+        writable: true,
       });
     }
 

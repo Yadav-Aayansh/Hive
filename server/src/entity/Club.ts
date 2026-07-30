@@ -17,11 +17,28 @@ import { Event } from "./Event";
 export type ClubType = "official" | "unofficial";
 export type ClubStatus = "pending" | "approved" | "rejected";
 
+// A fixed list because the directory filters on it: free text turns `Tech`,
+// `tech` and `Technology` into three categories and a filter that finds
+// nothing. The Zod schema reads the same array, so there is one source.
+export const CLUB_CATEGORIES = [
+  "technical",
+  "cultural",
+  "sports",
+  "academic",
+  "arts",
+  "literary",
+  "entrepreneurship",
+  "social_service",
+] as const;
+
+export type ClubCategory = (typeof CLUB_CATEGORIES)[number];
+
 @Unique("uq_clubs_college_slug", ["collegeId", "slug"])
 @Unique("uq_clubs_id_college", ["id", "collegeId"])
 @Check(`"type" IN ('official', 'unofficial')`)
 @Check(`"status" IN ('pending', 'approved', 'rejected')`)
 @Check(`"type" = 'official' OR "status" = 'approved'`)
+@Check(`"category" IN (${CLUB_CATEGORIES.map((c) => `'${c}'`).join(", ")})`)
 @Entity("clubs")
 export class Club {
   @PrimaryGeneratedColumn("uuid")
@@ -37,7 +54,7 @@ export class Club {
   slug!: string;
 
   @Column({ type: "varchar", length: 60 })
-  category!: string;
+  category!: ClubCategory;
 
   @Column({ type: "text", nullable: true })
   description!: string | null;
