@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AppDataSource } from "./config/data-source";
 import { authRouter } from "./modules/auth/auth.routes";
+import { clubRouter } from "./modules/club/club.routes";
 import { collegeRouter } from "./modules/college/college.routes";
 import { uploadRouter } from "./modules/upload/upload.routes";
 import { userRouter } from "./modules/user/user.routes";
@@ -19,4 +20,5 @@ apiRouter.get("/health", (_req, res) =>
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/users", userRouter);
 apiRouter.use("/colleges", collegeRouter);
+apiRouter.use("/clubs", clubRouter);
 apiRouter.use("/uploads", uploadRouter);
