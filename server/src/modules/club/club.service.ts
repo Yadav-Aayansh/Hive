@@ -107,7 +107,7 @@ async function loadClub(collegeId: string, slug: string): Promise<Club> {
   return club;
 }
 
-function findMembership(
+export function findClubMembership(
   clubId: string,
   studentId: string,
 ): Promise<ClubMembership | null> {
@@ -118,7 +118,7 @@ async function countApprovedMembers(clubId: string): Promise<number> {
   return memberships().countBy({ clubId, status: "approved" });
 }
 
-async function requireLeader(
+export async function requireClubLeader(
   clubId: string,
   userId: string,
 ): Promise<ClubMembership> {
@@ -301,7 +301,7 @@ export async function getClub(
   slug: string,
 ): Promise<ClubDetailDto> {
   const club = await loadClub(actor.collegeId, slug);
-  const membership = await findMembership(club.id, actor.id);
+  const membership = await findClubMembership(club.id, actor.id);
 
   if (
     club.status !== "approved" &&
@@ -325,7 +325,7 @@ export async function updateClub(
   input: UpdateClubInput,
 ): Promise<ClubDto> {
   const club = await loadClub(actor.collegeId, slug);
-  await requireLeader(club.id, actor.id);
+  await requireClubLeader(club.id, actor.id);
 
   const logoKey = input.logoUploadId
     ? await attachUpload(
@@ -396,7 +396,7 @@ export async function transferLeader(
     actor.role === "campus_admin" && club.type === "official";
 
   if (!isAdminTransfer) {
-    await requireLeader(club.id, actor.id);
+    await requireClubLeader(club.id, actor.id);
   }
 
   const current = await memberships().findOneBy({
@@ -406,7 +406,7 @@ export async function transferLeader(
   });
 
   if (current?.studentId !== targetUserId) {
-    const target = await findMembership(club.id, targetUserId);
+    const target = await findClubMembership(club.id, targetUserId);
 
     if (!target || target.status !== "approved") {
       throw new ValidationError("Invalid input", [
@@ -447,7 +447,7 @@ export async function joinClub(
     throw new NotFoundError("Club not found");
   }
 
-  const existing = await findMembership(club.id, actor.id);
+  const existing = await findClubMembership(club.id, actor.id);
 
   if (existing) {
     if (existing.status !== "rejected") {
@@ -479,7 +479,7 @@ export async function listMembers(
   slug: string,
 ): Promise<ClubMemberDto[]> {
   const club = await loadClub(actor.collegeId, slug);
-  const membership = await findMembership(club.id, actor.id);
+  const membership = await findClubMembership(club.id, actor.id);
 
   const isAdminViewer =
     actor.role === "campus_admin" && club.type === "official";
@@ -539,9 +539,9 @@ export async function decideMembership(
   status: "approved" | "rejected",
 ): Promise<ViewerMembership> {
   const club = await loadClub(actor.collegeId, slug);
-  await requireLeader(club.id, actor.id);
+  await requireClubLeader(club.id, actor.id);
 
-  const membership = await findMembership(club.id, targetUserId);
+  const membership = await findClubMembership(club.id, targetUserId);
 
   if (!membership) {
     throw new NotFoundError("This student has not applied to your club");
@@ -566,10 +566,10 @@ export async function removeMember(
   const club = await loadClub(actor.collegeId, slug);
 
   if (targetUserId !== actor.id) {
-    await requireLeader(club.id, actor.id);
+    await requireClubLeader(club.id, actor.id);
   }
 
-  const membership = await findMembership(club.id, targetUserId);
+  const membership = await findClubMembership(club.id, targetUserId);
 
   if (!membership) {
     throw new NotFoundError("This student is not part of your club");
