@@ -18,10 +18,22 @@ import { Student } from "./Student";
 
 export type EventStatus = "draft" | "published" | "cancelled";
 
+export const EVENT_CATEGORIES = [
+  "workshop",
+  "competition",
+  "seminar",
+  "cultural",
+  "sports",
+  "hackathon",
+] as const;
+
+export type EventCategory = (typeof EVENT_CATEGORIES)[number];
+
 @Unique("uq_events_id_college", ["id", "collegeId"])
 @Unique("uq_events_college_slug", ["collegeId", "slug"])
 @Index("idx_events_college_starts_at", ["collegeId", "startsAt"])
 @Check(`"status" IN ('draft', 'published', 'cancelled')`)
+@Check(`"category" IN (${EVENT_CATEGORIES.map((c) => `'${c}'`).join(", ")})`)
 @Check(`"capacity" IS NULL OR "capacity" > 0`)
 @Check(`"starts_at" < "ends_at"`)
 @Check(
@@ -57,7 +69,7 @@ export class Event {
   description!: string | null;
 
   @Column({ type: "varchar", length: 60 })
-  category!: string;
+  category!: EventCategory;
 
   @Index()
   @Column({ type: "timestamptz", name: "starts_at", nullable: true })
