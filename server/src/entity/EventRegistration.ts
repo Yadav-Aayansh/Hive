@@ -15,12 +15,17 @@ import { Event } from "./Event";
 import { Student } from "./Student";
 
 export type RegistrationStatus = "registered" | "checked_in" | "cancelled";
-export type ResultType = "participant" | "runner_up" | "winner";
+
+export const RESULT_TYPES = ["participant", "runner_up", "winner"] as const;
+
+export type ResultType = (typeof RESULT_TYPES)[number];
 
 @Unique("uq_registrations_event_student", ["eventId", "studentId"])
 @Unique("uq_registrations_id_college", ["id", "collegeId"])
 @Check(`"status" IN ('registered', 'checked_in', 'cancelled')`)
-@Check(`"result" IS NULL OR "result" IN ('participant', 'runner_up', 'winner')`)
+@Check(
+  `"result" IS NULL OR "result" IN (${RESULT_TYPES.map((r) => `'${r}'`).join(", ")})`,
+)
 @Check(`"status" <> 'checked_in' OR "checked_in_at" IS NOT NULL`)
 @Check(`"result" IS NULL OR "status" = 'checked_in'`)
 @Entity("event_registrations")
