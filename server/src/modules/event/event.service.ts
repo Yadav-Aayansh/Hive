@@ -15,10 +15,12 @@ import {
 import {
   EventRegistration,
   type RegistrationStatus,
+  type ResultType,
 } from "../../entity/EventRegistration";
 import { User, type UserRole } from "../../entity/User";
 import {
   ConflictError,
+  ForbiddenError,
   NotFoundError,
   ValidationError,
 } from "../../utils/AppError";
@@ -28,6 +30,8 @@ import { attachUpload } from "../upload/upload.service";
 import type {
   CreateEventInput,
   ListEventsInput,
+  ListRegistrationsInput,
+  PublishResultsInput,
   UpdateEventInput,
 } from "./event.schema";
 
@@ -42,10 +46,17 @@ interface ViewerMembership {
   status: MembershipStatus;
 }
 
+export interface ViewerRegistration {
+  status: RegistrationStatus;
+  result: ResultType | null;
+  registeredAt: Date;
+}
+
 export interface EventViewer {
   manages: boolean;
   isOrganizer: boolean;
   membership: MembershipStatus | null;
+  registration: ViewerRegistration | null;
 }
 
 export interface EventClubDto {
@@ -77,8 +88,25 @@ export interface EventPersonDto {
   avatarUrl: string | null;
 }
 
+export interface EventResultDto extends EventPersonDto {
+  result: ResultType;
+}
+
 export interface EventDetailDto extends EventDto {
   organizer: EventPersonDto | null;
+  results: EventResultDto[] | null;
+}
+
+export interface RegistrationDto {
+  id: string;
+  status: RegistrationStatus;
+  result: ResultType | null;
+  registeredAt: Date;
+  checkedInAt: Date | null;
+}
+
+export interface RegistrationRowDto extends RegistrationDto {
+  student: EventPersonDto;
 }
 
 const PUBLISHED_EDITABLE = new Set([
@@ -122,15 +150,41 @@ function toEventDto(
   };
 }
 
+function resultOf(registration: EventRegistration): ResultType | null {
+  if (registration.status !== "checked_in") {
+    return null;
+  }
+
+  return registration.result ?? "participant";
+}
+
+function toRegistrationDto(registration: EventRegistration): RegistrationDto {
+  return {
+    id: registration.id,
+    status: registration.status,
+    result: resultOf(registration),
+    registeredAt: registration.registeredAt,
+    checkedInAt: registration.checkedInAt,
+  };
+}
+
 function toViewer(
   event: Event,
   actorId: string,
   membership: ViewerMembership | null,
+  registration: EventRegistration | null,
 ): EventViewer {
   return {
     manages: membership?.role === "leader" && membership.status === "approved",
     isOrganizer: event.organizerId === actorId,
     membership: membership?.status ?? null,
+    registration: registration
+      ? {
+          status: registration.status,
+          result: event.resultsPublishedAt ? resultOf(registration) : null,
+          registeredAt: registration.registeredAt,
+        }
+      : null,
   };
 }
 
@@ -177,6 +231,62 @@ async function loadOrganizer(
     : null;
 }
 
+async function loadPodium(event: Event): Promise<EventResultDto[] | null> {
+  if (!event.resultsPublishedAt) {
+    return null;
+  }
+
+  const rows = await registrations()
+    .createQueryBuilder("registration")
+    .innerJoin(User, "user", "user.id = registration.studentId")
+    .select("user.id", "userId")
+    .addSelect("user.fullName", "fullName")
+    .addSelect("user.avatarKey", "avatarKey")
+    .addSelect("registration.result", "result")
+    .where("registration.event_id = :eventId", { eventId: event.id })
+    .andWhere("registration.result IN (:...results)", {
+      results: ["winner", "runner_up"],
+    })
+    .orderBy(
+      "CASE WHEN registration.result = 'winner' THEN 0 ELSE 1 END",
+      "ASC",
+    )
+    .addOrderBy("user.full_name", "ASC")
+    .getRawMany<{
+      userId: string;
+      fullName: string;
+      avatarKey: string | null;
+      result: ResultType;
+    }>();
+
+  return rows.map((row) => ({
+    userId: row.userId,
+    fullName: row.fullName,
+    avatarUrl: publicUrl(row.avatarKey),
+    result: row.result,
+  }));
+}
+
+async function requireEventManager(
+  event: Event,
+  actor: Actor,
+): Promise<ViewerMembership> {
+  const membership = await findClubMembership(event.clubId, actor.id);
+
+  const isLeader =
+    membership?.status === "approved" && membership.role === "leader";
+  const isOrganizer =
+    membership?.status === "approved" && event.organizerId === actor.id;
+
+  if (!membership || (!isLeader && !isOrganizer)) {
+    throw new ForbiddenError(
+      "Only the club leader or the event organizer can do this",
+    );
+  }
+
+  return membership;
+}
+
 async function requireApprovedMember(
   clubId: string,
   userId: string,
@@ -207,10 +317,14 @@ async function detailFor(
   event: Event & { club: Club },
   membership: ViewerMembership | null,
 ): Promise<EventDetailDto> {
-  const [registeredCount, organizer] = await Promise.all([
-    countRegistrations(event.id),
-    loadOrganizer(event.organizerId),
-  ]);
+  const [registeredCount, organizer, registration, results] = await Promise.all(
+    [
+      countRegistrations(event.id),
+      loadOrganizer(event.organizerId),
+      registrations().findOneBy({ eventId: event.id, studentId: actor.id }),
+      loadPodium(event),
+    ],
+  );
 
   const club = {
     id: event.club.id,
@@ -223,9 +337,10 @@ async function detailFor(
       event,
       club,
       registeredCount,
-      toViewer(event, actor.id, membership),
+      toViewer(event, actor.id, membership, registration),
     ),
     organizer,
+    results,
   };
 }
 
@@ -318,8 +433,24 @@ export async function listEvents(
     if (input.status) {
       query.andWhere("event.status = :status", { status: input.status });
     }
+  } else if (input.registered) {
+    query.andWhere("event.status IN (:...statuses)", {
+      statuses: ["published", "cancelled"],
+    });
   } else {
     query.andWhere("event.status = :published", { published: "published" });
+  }
+
+  if (input.registered) {
+    query.andWhere(
+      `EXISTS (
+         SELECT 1 FROM event_registrations r
+         WHERE r.event_id = event.id
+           AND r.student_id = :actorId
+           AND r.status <> 'cancelled'
+       )`,
+      { actorId: actor.id },
+    );
   }
 
   if (input.search) {
@@ -354,6 +485,7 @@ export async function listEvents(
 
   const counts = new Map<string, number>();
   const memberships = new Map<string, ViewerMembership>();
+  const mineByEvent = new Map<string, EventRegistration>();
 
   if (rows.length > 0) {
     const countRows = await registrations()
@@ -384,6 +516,15 @@ export async function listEvents(
         status: membership.status,
       });
     }
+
+    const mineRegistrations = await registrations().findBy({
+      eventId: In(rows.map((event) => event.id)),
+      studentId: actor.id,
+    });
+
+    for (const registration of mineRegistrations) {
+      mineByEvent.set(registration.eventId, registration);
+    }
   }
 
   return {
@@ -396,7 +537,12 @@ export async function listEvents(
           slug: event.club.slug,
         },
         counts.get(event.id) ?? 0,
-        toViewer(event, actor.id, memberships.get(event.clubId) ?? null),
+        toViewer(
+          event,
+          actor.id,
+          memberships.get(event.clubId) ?? null,
+          mineByEvent.get(event.id) ?? null,
+        ),
       ),
     ),
     total,
@@ -412,7 +558,7 @@ export async function getEvent(
   const event = await loadEvent(actor.collegeId, slug);
   const membership = await findClubMembership(event.clubId, actor.id);
 
-  const viewer = toViewer(event, actor.id, membership);
+  const viewer = toViewer(event, actor.id, membership, null);
 
   if (event.status === "draft" && !viewer.manages && !viewer.isOrganizer) {
     throw new NotFoundError("Event not found");
@@ -556,4 +702,315 @@ export async function deleteEvent(actor: Actor, slug: string): Promise<void> {
 
   await events().delete({ id: event.id });
   await deleteObjectQuietly(event.bannerKey);
+}
+
+export async function registerForEvent(
+  actor: Actor,
+  slug: string,
+): Promise<RegistrationDto> {
+  const event = await loadEvent(actor.collegeId, slug);
+
+  if (event.status !== "published") {
+    throw new ConflictError("This event is not open for registration");
+  }
+
+  if (event.checkinOpenedAt) {
+    throw new ConflictError("Registration has closed for this event");
+  }
+
+  const membership = await findClubMembership(event.clubId, actor.id);
+
+  if (membership?.status !== "approved") {
+    throw new ForbiddenError("Join this club to register for its events");
+  }
+
+  const registration = await AppDataSource.transaction(async (manager) => {
+    await manager.findOne(Event, {
+      where: { id: event.id },
+      lock: { mode: "pessimistic_write" },
+    });
+
+    const existing = await manager.findOneBy(EventRegistration, {
+      eventId: event.id,
+      studentId: actor.id,
+    });
+
+    if (existing && existing.status !== "cancelled") {
+      throw new ConflictError("You are already registered for this event");
+    }
+
+    if (event.capacity !== null) {
+      const taken = await manager.countBy(EventRegistration, {
+        eventId: event.id,
+        status: In(ACTIVE_REGISTRATIONS),
+      });
+
+      if (taken >= event.capacity) {
+        throw new ConflictError("This event is full");
+      }
+    }
+
+    if (existing) {
+      existing.status = "registered";
+      return manager.save(existing);
+    }
+
+    return manager.save(
+      manager.create(EventRegistration, {
+        collegeId: actor.collegeId,
+        eventId: event.id,
+        studentId: actor.id,
+        status: "registered",
+      }),
+    );
+  });
+
+  return toRegistrationDto(registration);
+}
+
+export async function cancelRegistration(
+  actor: Actor,
+  slug: string,
+): Promise<void> {
+  const event = await loadEvent(actor.collegeId, slug);
+
+  const registration = await registrations().findOneBy({
+    eventId: event.id,
+    studentId: actor.id,
+  });
+
+  if (!registration || registration.status === "cancelled") {
+    throw new NotFoundError("You are not registered for this event");
+  }
+
+  if (event.checkinOpenedAt) {
+    throw new ConflictError("Registration has closed for this event");
+  }
+
+  registration.status = "cancelled";
+  await registrations().save(registration);
+}
+
+export async function listRegistrations(
+  actor: Actor,
+  slug: string,
+  input: ListRegistrationsInput,
+): Promise<{
+  registrations: RegistrationRowDto[];
+  total: number;
+  page: number;
+  limit: number;
+}> {
+  const event = await loadEvent(actor.collegeId, slug);
+  await requireEventManager(event, actor);
+
+  const query = registrations()
+    .createQueryBuilder("registration")
+    .innerJoin(User, "user", "user.id = registration.studentId")
+    .where("registration.event_id = :eventId", { eventId: event.id });
+
+  if (input.status) {
+    query.andWhere("registration.status = :status", { status: input.status });
+  }
+
+  if (input.result === "participant") {
+    query
+      .andWhere("registration.status = :checkedIn", { checkedIn: "checked_in" })
+      .andWhere("registration.result IS NULL");
+  } else if (input.result) {
+    query.andWhere("registration.result = :result", { result: input.result });
+  }
+
+  if (input.search) {
+    query.andWhere("user.full_name ILIKE :search", {
+      search: `%${input.search}%`,
+    });
+  }
+
+  const total = await query.getCount();
+
+  const rows = await query
+    .select("registration.id", "id")
+    .addSelect("registration.status", "status")
+    .addSelect("registration.result", "result")
+    .addSelect("registration.registered_at", "registeredAt")
+    .addSelect("registration.checked_in_at", "checkedInAt")
+    .addSelect("user.id", "userId")
+    .addSelect("user.fullName", "fullName")
+    .addSelect("user.avatarKey", "avatarKey")
+    .orderBy("user.full_name", "ASC")
+    .offset((input.page - 1) * input.limit)
+    .limit(input.limit)
+    .getRawMany<{
+      id: string;
+      status: RegistrationStatus;
+      result: ResultType | null;
+      registeredAt: Date;
+      checkedInAt: Date | null;
+      userId: string;
+      fullName: string;
+      avatarKey: string | null;
+    }>();
+
+  return {
+    registrations: rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      result:
+        row.status === "checked_in" ? (row.result ?? "participant") : null,
+      registeredAt: row.registeredAt,
+      checkedInAt: row.checkedInAt,
+      student: {
+        userId: row.userId,
+        fullName: row.fullName,
+        avatarUrl: publicUrl(row.avatarKey),
+      },
+    })),
+    total,
+    page: input.page,
+    limit: input.limit,
+  };
+}
+
+export async function openCheckin(
+  actor: Actor,
+  slug: string,
+): Promise<EventDetailDto> {
+  const event = await loadEvent(actor.collegeId, slug);
+  const membership = await requireEventManager(event, actor);
+
+  if (event.status !== "published") {
+    throw new ConflictError("Only a published event can open check-in");
+  }
+
+  if (event.checkinOpenedAt) {
+    throw new ConflictError("Check-in is already open");
+  }
+
+  event.checkinOpenedAt = new Date();
+  await events().save(event);
+
+  return detailFor(actor, event, membership);
+}
+
+export async function checkInRegistration(
+  actor: Actor,
+  slug: string,
+  userId: string,
+): Promise<RegistrationDto> {
+  const event = await loadEvent(actor.collegeId, slug);
+  await requireEventManager(event, actor);
+
+  if (!event.checkinOpenedAt) {
+    throw new ConflictError("Open check-in before marking attendance");
+  }
+
+  if (event.resultsPublishedAt) {
+    throw new ConflictError("Results are published, this event is locked");
+  }
+
+  const registration = await registrations().findOneBy({
+    eventId: event.id,
+    studentId: userId,
+  });
+
+  if (!registration) {
+    throw new NotFoundError("This student is not registered for this event");
+  }
+
+  if (registration.status === "cancelled") {
+    throw new ConflictError("This student cancelled their registration");
+  }
+
+  if (registration.status === "checked_in") {
+    throw new ConflictError("This student is already checked in");
+  }
+
+  registration.status = "checked_in";
+  registration.checkedInAt = new Date();
+  await registrations().save(registration);
+
+  return toRegistrationDto(registration);
+}
+
+export async function publishResults(
+  actor: Actor,
+  slug: string,
+  input: PublishResultsInput,
+): Promise<EventDetailDto> {
+  const event = await loadEvent(actor.collegeId, slug);
+  const membership = await requireEventManager(event, actor);
+
+  if (event.resultsPublishedAt) {
+    throw new ConflictError("Results are already published");
+  }
+
+  if (event.status !== "published") {
+    throw new ConflictError("Only a published event can have results");
+  }
+
+  if (!event.checkinOpenedAt) {
+    throw new ConflictError("Open check-in before publishing results");
+  }
+
+  const named = [
+    ...(input.winnerUserId
+      ? [{ userId: input.winnerUserId, field: "winnerUserId" }]
+      : []),
+    ...input.runnerUpUserIds.map((userId, index) => ({
+      userId,
+      field: `runnerUpUserIds.${index}`,
+    })),
+  ];
+
+  if (named.length > 0) {
+    const attended = await registrations().findBy({
+      eventId: event.id,
+      studentId: In(named.map((entry) => entry.userId)),
+      status: "checked_in",
+    });
+
+    const checkedIn = new Set(attended.map((row) => row.studentId));
+    const missing = named.filter((entry) => !checkedIn.has(entry.userId));
+
+    if (missing.length > 0) {
+      throw new ValidationError(
+        "Invalid input",
+        missing.map((entry) => ({
+          field: entry.field,
+          message: "This student was not checked in at the event",
+        })),
+      );
+    }
+  }
+
+  const publishedAt = new Date();
+
+  await AppDataSource.transaction(async (manager) => {
+    if (input.winnerUserId) {
+      await manager.update(
+        EventRegistration,
+        { eventId: event.id, studentId: input.winnerUserId },
+        { result: "winner" },
+      );
+    }
+
+    if (input.runnerUpUserIds.length > 0) {
+      await manager.update(
+        EventRegistration,
+        { eventId: event.id, studentId: In(input.runnerUpUserIds) },
+        { result: "runner_up" },
+      );
+    }
+
+    await manager.update(
+      Event,
+      { id: event.id },
+      { resultsPublishedAt: publishedAt },
+    );
+  });
+
+  event.resultsPublishedAt = publishedAt;
+
+  return detailFor(actor, event, membership);
 }
