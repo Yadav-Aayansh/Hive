@@ -7,9 +7,13 @@ import {
 import { validate } from "../../middlewares/validate";
 import * as eventController from "./event.controller";
 import {
+  checkInSchema,
   createEventSchema,
   eventStatusSchema,
   listEventsSchema,
+  listRegistrationsSchema,
+  publishResultsSchema,
+  registrationParamsSchema,
   updateEventSchema,
 } from "./event.schema";
 
@@ -59,4 +63,50 @@ eventRouter.delete(
   authenticate,
   requireRole("student"),
   eventController.remove,
+);
+
+eventRouter.post(
+  "/:slug/registrations",
+  authenticate,
+  requireRole("student"),
+  eventController.register,
+);
+
+eventRouter.delete(
+  "/:slug/registrations",
+  authenticate,
+  requireRole("student"),
+  eventController.cancelRegistration,
+);
+
+eventRouter.get(
+  "/:slug/registrations",
+  authenticate,
+  requireRole("student"),
+  validate(listRegistrationsSchema, "query"),
+  eventController.registrations,
+);
+
+eventRouter.post(
+  "/:slug/checkin",
+  authenticate,
+  requireRole("student"),
+  eventController.openCheckin,
+);
+
+eventRouter.patch(
+  "/:slug/registrations/:userId",
+  authenticate,
+  requireRole("student"),
+  validate(registrationParamsSchema, "params"),
+  validate(checkInSchema),
+  eventController.checkIn,
+);
+
+eventRouter.put(
+  "/:slug/results",
+  authenticate,
+  requireRole("student"),
+  validate(publishResultsSchema),
+  eventController.publishResults,
 );

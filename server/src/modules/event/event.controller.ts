@@ -4,6 +4,9 @@ import type {
   CreateEventInput,
   EventStatusInput,
   ListEventsInput,
+  ListRegistrationsInput,
+  PublishResultsInput,
+  RegistrationParams,
   UpdateEventInput,
 } from "./event.schema";
 import * as eventService from "./event.service";
@@ -63,4 +66,58 @@ export async function remove(req: Request, res: Response) {
 
   await eventService.deleteEvent(actor(req), slug);
   return res.status(204).send();
+}
+
+export async function register(req: Request, res: Response) {
+  const { slug } = req.params as { slug: string };
+
+  const registration = await eventService.registerForEvent(actor(req), slug);
+  return sendSuccess(res, { registration }, 201);
+}
+
+export async function cancelRegistration(req: Request, res: Response) {
+  const { slug } = req.params as { slug: string };
+
+  await eventService.cancelRegistration(actor(req), slug);
+  return res.status(204).send();
+}
+
+export async function registrations(req: Request, res: Response) {
+  const { slug } = req.params as { slug: string };
+
+  const result = await eventService.listRegistrations(
+    actor(req),
+    slug,
+    req.query as unknown as ListRegistrationsInput,
+  );
+  return sendSuccess(res, result);
+}
+
+export async function openCheckin(req: Request, res: Response) {
+  const { slug } = req.params as { slug: string };
+
+  const event = await eventService.openCheckin(actor(req), slug);
+  return sendSuccess(res, { event });
+}
+
+export async function checkIn(req: Request, res: Response) {
+  const { slug, userId } = req.params as unknown as RegistrationParams;
+
+  const registration = await eventService.checkInRegistration(
+    actor(req),
+    slug,
+    userId,
+  );
+  return sendSuccess(res, { registration });
+}
+
+export async function publishResults(req: Request, res: Response) {
+  const { slug } = req.params as { slug: string };
+
+  const event = await eventService.publishResults(
+    actor(req),
+    slug,
+    req.body as PublishResultsInput,
+  );
+  return sendSuccess(res, { event });
 }
