@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AppDataSource } from "./config/data-source";
+import { announcementRouter } from "./modules/announcement/announcement.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { clubRouter } from "./modules/club/club.routes";
 import { collegeRouter } from "./modules/college/college.routes";
@@ -23,4 +24,5 @@ apiRouter.use("/users", userRouter);
 apiRouter.use("/colleges", collegeRouter);
 apiRouter.use("/clubs", clubRouter);
 apiRouter.use("/events", eventRouter);
+apiRouter.use("/announcements", announcementRouter);
 apiRouter.use("/uploads", uploadRouter);
