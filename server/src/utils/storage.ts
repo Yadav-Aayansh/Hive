@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
@@ -77,6 +78,18 @@ export async function uploadImage(
     .toBuffer();
 
   return putObject(webp, key, "image/webp");
+}
+
+export async function getObject(key: string): Promise<Buffer> {
+  const object = await r2.send(
+    new GetObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key }),
+  );
+
+  if (!object.Body) {
+    throw new Error(`Object ${key} is empty`);
+  }
+
+  return Buffer.from(await object.Body.transformToByteArray());
 }
 
 export async function headObject(key: string): Promise<boolean> {
