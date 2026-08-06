@@ -20,6 +20,11 @@ const envSchema = z.object({
 
   CORS_ORIGIN: z.string().min(1).default("http://localhost:5173"),
 
+  APP_URL: z
+    .url()
+    .default("http://localhost:5173")
+    .transform((value) => value.replace(/\/+$/, "")),
+
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),
   R2_SECRET_ACCESS_KEY: z.string().min(1),
