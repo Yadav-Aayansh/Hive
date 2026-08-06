@@ -8,7 +8,6 @@ const WIDTH = 841.89;
 const HEIGHT = 595.28;
 const CENTER = WIDTH / 2;
 
-// pdfkit resolves these itself, so no font file ships with the build.
 const BASE_14 = new Set([
   "Helvetica",
   "Helvetica-Bold",
@@ -97,8 +96,6 @@ function fontCallback(family: string): string {
   return BASE_14.has(name) ? name : "Helvetica";
 }
 
-// SVG cannot wrap text, so long names and titles are shrunk to the line
-// instead, measured with the same metrics pdfkit will draw with.
 function fitSize(
   probe: PDFKit.PDFDocument,
   text: string,
@@ -165,7 +162,6 @@ async function qrPath(text: string, size: number): Promise<string> {
   return path;
 }
 
-// pdfkit draws only JPEG and PNG, and stored logos are WebP.
 async function logoTag(logo: Buffer): Promise<string> {
   const png = await sharp(logo)
     .resize({ width: 104, height: 104, fit: "inside" })
