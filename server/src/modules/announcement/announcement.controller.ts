@@ -32,6 +32,16 @@ export async function list(req: Request, res: Response) {
   return sendSuccess(res, result);
 }
 
+export async function detail(req: Request, res: Response) {
+  const { id } = req.params as unknown as AnnouncementParams;
+
+  const announcement = await announcementService.getAnnouncement(
+    actor(req),
+    id,
+  );
+  return sendSuccess(res, { announcement });
+}
+
 export async function update(req: Request, res: Response) {
   const { id } = req.params as unknown as AnnouncementParams;
 

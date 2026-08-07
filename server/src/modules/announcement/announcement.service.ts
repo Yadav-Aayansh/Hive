@@ -7,6 +7,7 @@ import { User, type UserRole } from "../../entity/User";
 import { ForbiddenError, NotFoundError } from "../../utils/AppError";
 import { publicUrl } from "../../utils/storage";
 import { findClubMembership, requireClubLeader } from "../club/club.service";
+import { notify } from "../notification/notification.service";
 import type {
   CreateAnnouncementInput,
   ListAnnouncementsInput,
@@ -197,7 +198,40 @@ export async function createAnnouncement(
 
   const author = await loadAuthor(actor.id);
 
+  const audience = await memberships().find({
+    where: { collegeId: actor.collegeId, clubId: club.id, status: "approved" },
+    select: { studentId: true },
+  });
+
+  await notify(
+    audience
+      .map((membership) => membership.studentId)
+      .filter((userId) => userId !== actor.id),
+    {
+      type: "announcement_posted",
+      title: `${club.name} posted an announcement`,
+      body: announcement.title,
+      link: `/announcements/${announcement.id}`,
+    },
+  );
+
   return toAnnouncementDto(announcement, club, author, true);
+}
+
+export async function getAnnouncement(
+  actor: Actor,
+  id: string,
+): Promise<AnnouncementDto> {
+  const announcement = await loadAnnouncement(actor.collegeId, id);
+  const club = await loadClubById(actor.collegeId, announcement.clubId);
+  await requireClubAudience(club, actor);
+
+  const [author, leads] = await Promise.all([
+    loadAuthor(announcement.authorId),
+    leadClubIds(actor),
+  ]);
+
+  return toAnnouncementDto(announcement, club, author, leads.has(club.id));
 }
 
 export async function listAnnouncements(

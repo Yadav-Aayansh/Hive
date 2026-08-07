@@ -31,6 +31,14 @@ announcementRouter.get(
   announcementController.list,
 );
 
+announcementRouter.get(
+  "/:id",
+  authenticate,
+  requireOnboarded,
+  validate(announcementParamsSchema, "params"),
+  announcementController.detail,
+);
+
 announcementRouter.patch(
   "/:id",
   authenticate,
