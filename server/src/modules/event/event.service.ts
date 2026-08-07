@@ -25,6 +25,7 @@ import {
   ValidationError,
 } from "../../utils/AppError";
 import { deleteObjectQuietly, objectKey, publicUrl } from "../../utils/storage";
+import { mintCertificates } from "../certificate/certificate.service";
 import { findClubMembership, requireClubLeader } from "../club/club.service";
 import { attachUpload } from "../upload/upload.service";
 import type {
@@ -1008,6 +1009,8 @@ export async function publishResults(
       { id: event.id },
       { resultsPublishedAt: publishedAt },
     );
+
+    await mintCertificates(manager, event);
   });
 
   event.resultsPublishedAt = publishedAt;
