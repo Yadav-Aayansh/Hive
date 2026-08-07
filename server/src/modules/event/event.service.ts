@@ -27,6 +27,7 @@ import {
 import { deleteObjectQuietly, objectKey, publicUrl } from "../../utils/storage";
 import { mintCertificates } from "../certificate/certificate.service";
 import { findClubMembership, requireClubLeader } from "../club/club.service";
+import { notify } from "../notification/notification.service";
 import { attachUpload } from "../upload/upload.service";
 import type {
   CreateEventInput,
@@ -657,6 +658,15 @@ export async function updateEvent(
   return detailFor(actor, event, { role: "leader", status: "approved" });
 }
 
+async function activeRegistrantIds(eventId: string): Promise<string[]> {
+  const rows = await registrations().find({
+    where: { eventId, status: In(ACTIVE_REGISTRATIONS) },
+    select: { studentId: true },
+  });
+
+  return rows.map((row) => row.studentId);
+}
+
 export async function setEventStatus(
   actor: Actor,
   slug: string,
@@ -689,6 +699,34 @@ export async function setEventStatus(
 
   event.status = status;
   await events().save(event);
+
+  if (status === "published") {
+    const audience = await AppDataSource.getRepository(ClubMembership).find({
+      where: {
+        collegeId: actor.collegeId,
+        clubId: event.clubId,
+        status: "approved",
+      },
+      select: { studentId: true },
+    });
+
+    await notify(
+      audience
+        .map((membership) => membership.studentId)
+        .filter((userId) => userId !== actor.id),
+      {
+        type: "event_published",
+        title: `${event.title} is open for registration`,
+        link: `/events/${event.slug}`,
+      },
+    );
+  } else {
+    await notify(await activeRegistrantIds(event.id), {
+      type: "event_cancelled",
+      title: `${event.title} was cancelled`,
+      link: `/events/${event.slug}`,
+    });
+  }
 
   return detailFor(actor, event, { role: "leader", status: "approved" });
 }
@@ -1014,6 +1052,12 @@ export async function publishResults(
   });
 
   event.resultsPublishedAt = publishedAt;
+
+  await notify(await activeRegistrantIds(event.id), {
+    type: "results_published",
+    title: `Results are out for ${event.title}`,
+    link: `/events/${event.slug}`,
+  });
 
   return detailFor(actor, event, membership);
 }
