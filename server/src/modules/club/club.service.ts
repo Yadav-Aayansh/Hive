@@ -20,6 +20,7 @@ import {
   ValidationError,
 } from "../../utils/AppError";
 import { deleteObjectQuietly, objectKey, publicUrl } from "../../utils/storage";
+import { notify } from "../notification/notification.service";
 import { attachUpload } from "../upload/upload.service";
 import type {
   CreateClubInput,
@@ -380,7 +381,21 @@ export async function decideClub(
   club.status = status;
   await clubs().save(club);
 
-  const memberCount = await countApprovedMembers(club.id);
+  const [memberCount, leader] = await Promise.all([
+    countApprovedMembers(club.id),
+    loadLeader(club.id),
+  ]);
+
+  if (leader) {
+    await notify([leader.userId], {
+      type: status === "approved" ? "club_approved" : "club_rejected",
+      title:
+        status === "approved"
+          ? `${club.name} was approved`
+          : `${club.name} was not approved`,
+      link: `/clubs/${club.slug}`,
+    });
+  }
 
   return toClubDto(club, memberCount, null);
 }
@@ -437,6 +452,20 @@ export async function transferLeader(
   return getClub(actor, slug);
 }
 
+async function notifyLeaderOfRequest(club: Club): Promise<void> {
+  const leader = await loadLeader(club.id);
+
+  if (!leader) {
+    return;
+  }
+
+  await notify([leader.userId], {
+    type: "join_requested",
+    title: `New join request for ${club.name}`,
+    link: `/clubs/${club.slug}/members`,
+  });
+}
+
 export async function joinClub(
   actor: Actor,
   slug: string,
@@ -458,6 +487,8 @@ export async function joinClub(
     existing.decidedAt = null;
     await memberships().save(existing);
 
+    await notifyLeaderOfRequest(club);
+
     return toViewer(existing)!;
   }
 
@@ -470,6 +501,8 @@ export async function joinClub(
       status: "pending",
     }),
   );
+
+  await notifyLeaderOfRequest(club);
 
   return toViewer(membership)!;
 }
@@ -554,6 +587,15 @@ export async function decideMembership(
   membership.status = status;
   membership.decidedAt = new Date();
   await memberships().save(membership);
+
+  await notify([targetUserId], {
+    type: status === "approved" ? "join_approved" : "join_rejected",
+    title:
+      status === "approved"
+        ? `You joined ${club.name}`
+        : `Your request to join ${club.name} was declined`,
+    link: `/clubs/${club.slug}`,
+  });
 
   return toViewer(membership)!;
 }
