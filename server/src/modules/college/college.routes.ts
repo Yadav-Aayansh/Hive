@@ -18,6 +18,14 @@ collegeRouter.post(
   collegeController.onboard,
 );
 
+collegeRouter.get(
+  "/stats",
+  authenticate,
+  requireRole("campus_admin"),
+  requireOnboarded,
+  collegeController.stats,
+);
+
 collegeRouter.patch(
   "/:slug",
   authenticate,

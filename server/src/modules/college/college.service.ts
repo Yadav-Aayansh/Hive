@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
 import { AppDataSource } from "../../config/data-source";
+import { Certificate } from "../../entity/Certificate";
+import { Club } from "../../entity/Club";
 import { College } from "../../entity/College";
+import { Event } from "../../entity/Event";
 import { User } from "../../entity/User";
 import {
   ConflictError,
@@ -34,6 +37,43 @@ function toCollegeDto(college: College): CollegeDto {
     description: college.description,
     logoUrl: publicUrl(college.logoKey),
     status: college.status,
+  };
+}
+
+export interface CollegeStatsDto {
+  clubs: { total: number; pending: number };
+  events: { total: number; published: number };
+  members: number;
+  certificates: number;
+}
+
+export async function getCollegeStats(
+  collegeId: string,
+): Promise<CollegeStatsDto> {
+  const clubs = AppDataSource.getRepository(Club);
+  const events = AppDataSource.getRepository(Event);
+
+  const [
+    clubTotal,
+    clubPending,
+    eventTotal,
+    eventPublished,
+    members,
+    certificates,
+  ] = await Promise.all([
+    clubs.countBy({ collegeId }),
+    clubs.countBy({ collegeId, status: "pending" }),
+    events.countBy({ collegeId }),
+    events.countBy({ collegeId, status: "published" }),
+    AppDataSource.getRepository(User).countBy({ collegeId, role: "student" }),
+    AppDataSource.getRepository(Certificate).countBy({ collegeId }),
+  ]);
+
+  return {
+    clubs: { total: clubTotal, pending: clubPending },
+    events: { total: eventTotal, published: eventPublished },
+    members,
+    certificates,
   };
 }
 

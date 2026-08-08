@@ -13,6 +13,11 @@ export async function onboard(req: Request, res: Response) {
   return sendSuccess(res, { college }, 201);
 }
 
+export async function stats(req: Request, res: Response) {
+  const stats = await collegeService.getCollegeStats(req.user!.collegeId!);
+  return sendSuccess(res, { stats });
+}
+
 export async function update(req: Request, res: Response) {
   const { slug } = req.params as { slug: string };
 
