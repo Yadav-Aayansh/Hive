@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -9,18 +10,22 @@ import {
 } from "typeorm";
 import { User } from "./User";
 
-export type NotificationType =
-  | "club_approved"
-  | "club_rejected"
-  | "join_requested"
-  | "join_approved"
-  | "join_rejected"
-  | "event_published"
-  | "event_cancelled"
-  | "results_published"
-  | "certificate_issued";
+export const NOTIFICATION_TYPES = [
+  "club_approved",
+  "club_rejected",
+  "join_requested",
+  "join_approved",
+  "join_rejected",
+  "event_published",
+  "event_cancelled",
+  "results_published",
+  "announcement_posted",
+] as const;
+
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 @Index("idx_notifications_user_read", ["userId", "readAt"])
+@Check(`"type" IN (${NOTIFICATION_TYPES.map((t) => `'${t}'`).join(", ")})`)
 @Entity("notifications")
 export class Notification {
   @PrimaryGeneratedColumn("uuid")
