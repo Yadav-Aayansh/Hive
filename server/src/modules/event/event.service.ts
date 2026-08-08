@@ -470,6 +470,16 @@ export async function listEvents(
     query.andWhere("club.slug = :clubSlug", { clubSlug: input.club });
   }
 
+  if (input.available) {
+    query.andWhere("event.checkin_opened_at IS NULL").andWhere(
+      `(event.capacity IS NULL OR event.capacity > (
+         SELECT COUNT(*) FROM event_registrations r
+         WHERE r.event_id = event.id AND r.status IN (:...activeStatuses)
+       ))`,
+      { activeStatuses: ACTIVE_REGISTRATIONS },
+    );
+  }
+
   if (input.from) {
     query.andWhere("event.starts_at >= :from", { from: input.from });
   }
@@ -478,9 +488,19 @@ export async function listEvents(
     query.andWhere("event.starts_at <= :to", { to: input.to });
   }
 
+  if (input.sort === "newest") {
+    query.orderBy("event.createdAt", "DESC");
+  } else if (input.sort === "latest") {
+    query
+      .orderBy("event.startsAt", "DESC", "NULLS LAST")
+      .addOrderBy("event.createdAt", "DESC");
+  } else {
+    query
+      .orderBy("event.startsAt", "ASC", "NULLS LAST")
+      .addOrderBy("event.createdAt", "DESC");
+  }
+
   const [rows, total] = await query
-    .orderBy("event.startsAt", "ASC", "NULLS LAST")
-    .addOrderBy("event.createdAt", "DESC")
     .skip((input.page - 1) * input.limit)
     .take(input.limit)
     .getManyAndCount();

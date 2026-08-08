@@ -67,7 +67,9 @@ export const listEventsSchema = z.object({
   to: timestamp.optional(),
   manage: flag,
   registered: flag,
+  available: flag,
   status: z.enum(["draft", "published", "cancelled"]).optional(),
+  sort: z.enum(["soonest", "latest", "newest"]).default("soonest"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
