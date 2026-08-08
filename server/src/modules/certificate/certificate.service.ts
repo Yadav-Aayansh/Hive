@@ -152,6 +152,15 @@ export async function mintCertificates(
   manager: EntityManager,
   event: Event,
 ): Promise<void> {
+  const club = await manager.findOneBy(Club, {
+    id: event.clubId,
+    collegeId: event.collegeId,
+  });
+
+  if (club?.type !== "official" || club.status !== "approved") {
+    return;
+  }
+
   const attendees = await manager.find(EventRegistration, {
     where: {
       collegeId: event.collegeId,

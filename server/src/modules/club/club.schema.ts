@@ -56,6 +56,7 @@ export const listClubsSchema = z.object({
   type: type.optional(),
   status: z.enum(["pending", "approved", "rejected"]).optional(),
   mine: flag,
+  sort: z.enum(["name", "newest"]).default("name"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });

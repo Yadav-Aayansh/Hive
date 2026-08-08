@@ -252,8 +252,13 @@ export async function listClubs(
     query.andWhere("club.type = :type", { type: input.type });
   }
 
+  if (input.sort === "newest") {
+    query.orderBy("club.createdAt", "DESC").addOrderBy("club.name", "ASC");
+  } else {
+    query.orderBy("club.name", "ASC");
+  }
+
   const [rows, total] = await query
-    .orderBy("club.name", "ASC")
     .skip((input.page - 1) * input.limit)
     .take(input.limit)
     .getManyAndCount();
