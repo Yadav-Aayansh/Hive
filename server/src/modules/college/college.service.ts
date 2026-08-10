@@ -8,6 +8,7 @@ import { User } from "../../entity/User";
 import {
   ConflictError,
   ForbiddenError,
+  NotFoundError,
   UnauthenticatedError,
   ValidationError,
 } from "../../utils/AppError";
@@ -38,6 +39,32 @@ function toCollegeDto(college: College): CollegeDto {
     logoUrl: publicUrl(college.logoKey),
     status: college.status,
   };
+}
+
+export interface PublicCollegeDto {
+  name: string;
+  slug: string;
+  description: string | null;
+  logoUrl: string | null;
+}
+
+function toPublicCollegeDto(college: College): PublicCollegeDto {
+  return {
+    name: college.name,
+    slug: college.slug,
+    description: college.description,
+    logoUrl: publicUrl(college.logoKey),
+  };
+}
+
+export async function getCollege(slug: string): Promise<PublicCollegeDto> {
+  const college = await AppDataSource.getRepository(College).findOneBy({ slug });
+
+  if (!college) {
+    throw new NotFoundError("College not found");
+  }
+
+  return toPublicCollegeDto(college);
 }
 
 export interface CollegeStatsDto {

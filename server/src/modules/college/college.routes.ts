@@ -6,7 +6,11 @@ import {
 } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import * as collegeController from "./college.controller";
-import { onboardingSchema, updateCollegeSchema } from "./college.schema";
+import {
+  collegeParamsSchema,
+  onboardingSchema,
+  updateCollegeSchema,
+} from "./college.schema";
 
 export const collegeRouter = Router();
 
@@ -24,6 +28,12 @@ collegeRouter.get(
   requireRole("campus_admin"),
   requireOnboarded,
   collegeController.stats,
+);
+
+collegeRouter.get(
+  "/:slug",
+  validate(collegeParamsSchema, "params"),
+  collegeController.detail,
 );
 
 collegeRouter.patch(

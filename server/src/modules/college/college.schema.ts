@@ -35,6 +35,16 @@ export const onboardingSchema = z.object({
 });
 
 
+export const collegeParamsSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+});
+
 export const updateCollegeSchema = z
   .object({
     name: name.optional(),
@@ -46,4 +56,5 @@ export const updateCollegeSchema = z
   });
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
+export type CollegeParams = z.infer<typeof collegeParamsSchema>;
 export type UpdateCollegeInput = z.infer<typeof updateCollegeSchema>;

@@ -1,7 +1,11 @@
 import type { Request, Response } from "express";
 import { setAuthCookie } from "../../utils/cookie";
 import { sendSuccess } from "../../utils/response";
-import type { OnboardingInput, UpdateCollegeInput } from "./college.schema";
+import type {
+  CollegeParams,
+  OnboardingInput,
+  UpdateCollegeInput,
+} from "./college.schema";
 import * as collegeService from "./college.service";
 
 export async function onboard(req: Request, res: Response) {
@@ -11,6 +15,12 @@ export async function onboard(req: Request, res: Response) {
   );
   setAuthCookie(res, issued.token);
   return sendSuccess(res, { college }, 201);
+}
+
+export async function detail(req: Request, res: Response) {
+  const { slug } = req.params as CollegeParams;
+  const college = await collegeService.getCollege(slug);
+  return sendSuccess(res, { college });
 }
 
 export async function stats(req: Request, res: Response) {
