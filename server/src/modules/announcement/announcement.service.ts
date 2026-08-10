@@ -7,7 +7,10 @@ import { User, type UserRole } from "../../entity/User";
 import { ForbiddenError, NotFoundError } from "../../utils/AppError";
 import { publicUrl } from "../../utils/storage";
 import { findClubMembership, requireClubLeader } from "../club/club.service";
-import { notify } from "../notification/notification.service";
+import {
+  dropNotificationsByLink,
+  notify,
+} from "../notification/notification.service";
 import type {
   CreateAnnouncementInput,
   ListAnnouncementsInput,
@@ -342,4 +345,6 @@ export async function deleteAnnouncement(
   await requireClubLeader(announcement.clubId, actor.id);
 
   await announcements().delete({ id: announcement.id });
+
+  await dropNotificationsByLink(`/announcements/${announcement.id}`);
 }

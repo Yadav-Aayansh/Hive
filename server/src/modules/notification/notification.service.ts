@@ -78,6 +78,14 @@ export async function notify(
   }
 }
 
+export async function dropNotificationsByLink(link: string): Promise<void> {
+  try {
+    await notifications().delete({ link });
+  } catch (err) {
+    logger.warn({ err, link }, "Failed to delete notifications for link");
+  }
+}
+
 export async function listNotifications(
   actor: Actor,
   input: ListNotificationsInput,
