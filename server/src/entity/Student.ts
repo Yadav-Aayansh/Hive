@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -13,6 +14,30 @@ import {
 import { ClubMembership } from "./ClubMembership";
 import { User } from "./User";
 
+export const STUDENT_BRANCHES = [
+  "computer_science",
+  "information_technology",
+  "electronics",
+  "electrical",
+  "mechanical",
+  "civil",
+  "chemical",
+  "aerospace",
+  "biotechnology",
+  "data_science",
+  "mathematics",
+  "physics",
+  "chemistry",
+  "management",
+  "humanities",
+  "other",
+] as const;
+
+export type StudentBranch = (typeof STUDENT_BRANCHES)[number];
+
+@Check(
+  `"branch" IS NULL OR "branch" IN (${STUDENT_BRANCHES.map((b) => `'${b}'`).join(", ")})`,
+)
 @Unique("uq_students_user_college", ["userId", "collegeId"])
 @Index("uq_students_college_roll", ["collegeId", "rollNo"], {
   unique: true,
@@ -30,8 +55,8 @@ export class Student {
   @Column({ type: "varchar", length: 40, name: "roll_no", nullable: true })
   rollNo!: string | null;
 
-  @Column({ type: "varchar", length: 100, nullable: true })
-  branch!: string | null;
+  @Column({ type: "varchar", length: 40, nullable: true })
+  branch!: StudentBranch | null;
 
   @Column({ type: "text", nullable: true })
   bio!: string | null;

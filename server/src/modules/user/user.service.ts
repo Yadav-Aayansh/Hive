@@ -1,6 +1,6 @@
 import { AppDataSource } from "../../config/data-source";
 import { College } from "../../entity/College";
-import { Student } from "../../entity/Student";
+import { Student, type StudentBranch } from "../../entity/Student";
 import { User } from "../../entity/User";
 import {
   ConflictError,
@@ -18,7 +18,7 @@ export interface PublicUserDto {
   id: string;
   fullName: string;
   avatarUrl: string | null;
-  branch: string | null;
+  branch: StudentBranch | null;
   bio: string | null;
 }
 
@@ -31,7 +31,7 @@ export interface UserDto {
   collegeSlug: string | null;
   student: {
     rollNo: string | null;
-    branch: string | null;
+    branch: StudentBranch | null;
     bio: string | null;
   } | null;
 }

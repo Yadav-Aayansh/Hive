@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { STUDENT_BRANCHES } from "../../entity/Student";
 
 export const updateProfileSchema = z
   .object({
     fullName: z.string().trim().min(2).max(120).optional(),
     avatarUploadId: z.uuid().optional(),
     rollNo: z.string().trim().min(1).max(40).nullable().optional(),
-    branch: z.string().trim().min(1).max(100).nullable().optional(),
+    branch: z.enum(STUDENT_BRANCHES).nullable().optional(),
     bio: z.string().trim().max(1000).nullable().optional(),
   })
   .refine((input) => Object.keys(input).length > 0, {
