@@ -16,8 +16,11 @@ import { Student } from "./Student";
 
 export type UserRole = "campus_admin" | "student";
 
-@Check(`"role" IN ('campus_admin', 'student')`)
-@Check(`"role" <> 'student' OR "college_id" IS NOT NULL`)
+@Check("chk_users_role", `"role" IN ('campus_admin', 'student')`)
+@Check(
+  "chk_users_student_has_college",
+  `"role" <> 'student' OR "college_id" IS NOT NULL`,
+)
 @Unique("uq_users_id_college", ["id", "collegeId"])
 @Index("uq_one_admin_per_college", ["collegeId"], {
   unique: true,

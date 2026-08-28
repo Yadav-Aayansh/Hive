@@ -35,10 +35,16 @@ export type ClubCategory = (typeof CLUB_CATEGORIES)[number];
 
 @Unique("uq_clubs_college_slug", ["collegeId", "slug"])
 @Unique("uq_clubs_id_college", ["id", "collegeId"])
-@Check(`"type" IN ('official', 'unofficial')`)
-@Check(`"status" IN ('pending', 'approved', 'rejected')`)
-@Check(`"type" = 'official' OR "status" = 'approved'`)
-@Check(`"category" IN (${CLUB_CATEGORIES.map((c) => `'${c}'`).join(", ")})`)
+@Check("chk_clubs_type", `"type" IN ('official', 'unofficial')`)
+@Check("chk_clubs_status", `"status" IN ('pending', 'approved', 'rejected')`)
+@Check(
+  "chk_clubs_unofficial_approved",
+  `"type" = 'official' OR "status" = 'approved'`,
+)
+@Check(
+  "chk_clubs_category",
+  `"category" IN (${CLUB_CATEGORIES.map((c) => `'${c}'`).join(", ")})`,
+)
 @Entity("clubs")
 export class Club {
   @PrimaryGeneratedColumn("uuid")

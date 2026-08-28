@@ -12,7 +12,7 @@ import { User } from "./User";
 
 export type CollegeStatus = "pending" | "verified";
 
-@Check(`"status" IN ('pending', 'verified')`)
+@Check("chk_colleges_status", `"status" IN ('pending', 'verified')`)
 @Entity("colleges")
 export class College {
   @PrimaryGeneratedColumn("uuid")

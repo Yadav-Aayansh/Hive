@@ -32,15 +32,23 @@ export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 @Unique("uq_events_id_college", ["id", "collegeId"])
 @Unique("uq_events_college_slug", ["collegeId", "slug"])
 @Index("idx_events_college_starts_at", ["collegeId", "startsAt"])
-@Check(`"status" IN ('draft', 'published', 'cancelled')`)
-@Check(`"category" IN (${EVENT_CATEGORIES.map((c) => `'${c}'`).join(", ")})`)
-@Check(`"capacity" IS NULL OR "capacity" > 0`)
-@Check(`"starts_at" < "ends_at"`)
+@Check("chk_events_status", `"status" IN ('draft', 'published', 'cancelled')`)
 @Check(
+  "chk_events_category",
+  `"category" IN (${EVENT_CATEGORIES.map((c) => `'${c}'`).join(", ")})`,
+)
+@Check("chk_events_capacity", `"capacity" IS NULL OR "capacity" > 0`)
+@Check("chk_events_time_order", `"starts_at" < "ends_at"`)
+@Check(
+  "chk_events_published_has_times",
   `("starts_at" IS NOT NULL AND "ends_at" IS NOT NULL) OR "status" = 'draft'`,
 )
-@Check(`"checkin_opened_at" IS NULL OR "status" <> 'draft'`)
 @Check(
+  "chk_events_checkin_not_draft",
+  `"checkin_opened_at" IS NULL OR "status" <> 'draft'`,
+)
+@Check(
+  "chk_events_results_after_checkin",
   `"results_published_at" IS NULL OR ("status" = 'published' AND "checkin_opened_at" IS NOT NULL)`,
 )
 @Entity("events")
@@ -84,7 +92,7 @@ export class Event {
   @Column({ type: "varchar", length: 160, nullable: true })
   venue!: string | null;
 
-  @Column({ type: "text", name: "banner_key", nullable: true })
+  @Column({ type: "varchar", length: 255, name: "banner_key", nullable: true })
   bannerKey!: string | null;
 
   @Column({ type: "varchar", length: 20, default: "draft" })

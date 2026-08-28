@@ -25,7 +25,10 @@ export const NOTIFICATION_TYPES = [
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 @Index("idx_notifications_user_read", ["userId", "readAt"])
-@Check(`"type" IN (${NOTIFICATION_TYPES.map((t) => `'${t}'`).join(", ")})`)
+@Check(
+  "chk_notifications_type",
+  `"type" IN (${NOTIFICATION_TYPES.map((t) => `'${t}'`).join(", ")})`,
+)
 @Entity("notifications")
 export class Notification {
   @PrimaryGeneratedColumn("uuid")

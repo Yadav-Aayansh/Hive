@@ -36,6 +36,7 @@ export const STUDENT_BRANCHES = [
 export type StudentBranch = (typeof STUDENT_BRANCHES)[number];
 
 @Check(
+  "chk_students_branch",
   `"branch" IS NULL OR "branch" IN (${STUDENT_BRANCHES.map((b) => `'${b}'`).join(", ")})`,
 )
 @Unique("uq_students_user_college", ["userId", "collegeId"])

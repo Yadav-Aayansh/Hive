@@ -20,9 +20,15 @@ export type MembershipStatus = "pending" | "approved" | "rejected";
   unique: true,
   where: `"role" = 'leader' AND "status" = 'approved'`,
 })
-@Check(`"role" IN ('member', 'leader')`)
-@Check(`"status" IN ('pending', 'approved', 'rejected')`)
-@Check(`"status" = 'pending' OR "decided_at" IS NOT NULL`)
+@Check("chk_memberships_role", `"role" IN ('member', 'leader')`)
+@Check(
+  "chk_memberships_status",
+  `"status" IN ('pending', 'approved', 'rejected')`,
+)
+@Check(
+  "chk_memberships_decided_at",
+  `"status" = 'pending' OR "decided_at" IS NOT NULL`,
+)
 @Entity("club_memberships")
 export class ClubMembership {
   @PrimaryGeneratedColumn("uuid")
