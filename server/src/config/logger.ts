@@ -1,5 +1,5 @@
 import pino from "pino";
-import { env, isProduction } from "./env";
+import { isProduction } from "./env";
 
 export const logger = pino({
   level: isProduction ? "info" : "debug",

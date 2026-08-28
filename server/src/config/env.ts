@@ -5,11 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
 
-  POSTGRES_HOST: z.string().min(1),
-  POSTGRES_PORT: z.coerce.number().int().positive(),
-  POSTGRES_USER: z.string().min(1),
-  POSTGRES_PASSWORD: z.string().min(1),
-  POSTGRES_DB: z.string().min(1),
+  DATABASE_URL: z.url().default("postgres://hive:hive@localhost:5432/hive"),
 
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
 
