@@ -120,6 +120,8 @@ const PUBLISHED_EDITABLE = new Set([
 
 const ACTIVE_REGISTRATIONS: RegistrationStatus[] = ["registered", "checked_in"];
 
+const CHECKIN_LEAD_MS = 24 * 60 * 60 * 1000;
+
 function events() {
   return AppDataSource.getRepository(Event);
 }
@@ -170,6 +172,14 @@ function toRegistrationDto(registration: EventRegistration): RegistrationDto {
   };
 }
 
+function isEventOrganizer(
+  event: Event,
+  actorId: string,
+  membership: ViewerMembership | null,
+): boolean {
+  return event.organizerId === actorId && membership?.status === "approved";
+}
+
 function toViewer(
   event: Event,
   actorId: string,
@@ -178,7 +188,7 @@ function toViewer(
 ): EventViewer {
   return {
     manages: membership?.role === "leader" && membership.status === "approved",
-    isOrganizer: event.organizerId === actorId,
+    isOrganizer: isEventOrganizer(event, actorId, membership),
     membership: membership?.status ?? null,
     registration: registration
       ? {
@@ -277,8 +287,7 @@ async function requireEventManager(
 
   const isLeader =
     membership?.status === "approved" && membership.role === "leader";
-  const isOrganizer =
-    membership?.status === "approved" && event.organizerId === actor.id;
+  const isOrganizer = isEventOrganizer(event, actor.id, membership);
 
   if (!membership || (!isLeader && !isOrganizer)) {
     throw new ForbiddenError(
@@ -306,10 +315,49 @@ async function requireApprovedMember(
   }
 }
 
+async function requireNotRegistered(
+  eventId: string,
+  userId: string,
+  field: string,
+): Promise<void> {
+  const registered = await registrations().existsBy({
+    eventId,
+    studentId: userId,
+    status: In(ACTIVE_REGISTRATIONS),
+  });
+
+  if (registered) {
+    throw new ValidationError("Invalid input", [
+      {
+        field,
+        message: "This student is registered for the event, so cannot organise it",
+      },
+    ]);
+  }
+}
+
+async function findLeaderId(clubId: string): Promise<string | null> {
+  const leader = await AppDataSource.getRepository(ClubMembership).findOneBy({
+    clubId,
+    role: "leader",
+    status: "approved",
+  });
+
+  return leader?.studentId ?? null;
+}
+
 function assertTimeOrder(startsAt: Date | null, endsAt: Date | null): void {
   if (startsAt && endsAt && startsAt >= endsAt) {
     throw new ValidationError("Invalid input", [
       { field: "endsAt", message: "The event must end after it starts" },
+    ]);
+  }
+}
+
+function assertStartsInFuture(startsAt: Date | null): void {
+  if (startsAt && startsAt.getTime() <= Date.now()) {
+    throw new ValidationError("Invalid input", [
+      { field: "startsAt", message: "The event must start in the future" },
     ]);
   }
 }
@@ -375,6 +423,7 @@ export async function createEvent(
   const endsAt = input.endsAt ?? null;
 
   assertTimeOrder(startsAt, endsAt);
+  assertStartsInFuture(startsAt);
 
   const eventId = crypto.randomUUID();
 
@@ -623,12 +672,21 @@ export async function updateEvent(
       input.organizerUserId,
       "organizerUserId",
     );
+    await requireNotRegistered(
+      event.id,
+      input.organizerUserId,
+      "organizerUserId",
+    );
   }
 
   assertTimeOrder(
     input.startsAt !== undefined ? input.startsAt : event.startsAt,
     input.endsAt !== undefined ? input.endsAt : event.endsAt,
   );
+
+  if (input.startsAt !== undefined) {
+    assertStartsInFuture(input.startsAt);
+  }
 
   const bannerKey = input.bannerUploadId
     ? await attachUpload(
@@ -711,6 +769,10 @@ export async function setEventStatus(
     if (!event.startsAt || !event.endsAt) {
       throw new ConflictError("Set a start and end time before publishing");
     }
+
+    if (event.startsAt.getTime() <= Date.now()) {
+      throw new ConflictError("Move the start time forward before publishing");
+    }
   }
 
   if (status === "cancelled" && event.status !== "published") {
@@ -783,11 +845,25 @@ export async function registerForEvent(
     throw new ForbiddenError("Join this club to register for its events");
   }
 
+  if (event.organizerId === actor.id) {
+    throw new ForbiddenError(
+      "You are organising this event, so you cannot register for it",
+    );
+  }
+
   const registration = await AppDataSource.transaction(async (manager) => {
-    await manager.findOne(Event, {
+    const locked = await manager.findOne(Event, {
       where: { id: event.id },
       lock: { mode: "pessimistic_write" },
     });
+
+    if (!locked) {
+      throw new NotFoundError("Event not found");
+    }
+
+    if (locked.status !== "published" || locked.checkinOpenedAt) {
+      throw new ConflictError("Registration has closed for this event");
+    }
 
     const existing = await manager.findOneBy(EventRegistration, {
       eventId: event.id,
@@ -798,13 +874,13 @@ export async function registerForEvent(
       throw new ConflictError("You are already registered for this event");
     }
 
-    if (event.capacity !== null) {
+    if (locked.capacity !== null) {
       const taken = await manager.countBy(EventRegistration, {
         eventId: event.id,
         status: In(ACTIVE_REGISTRATIONS),
       });
 
-      if (taken >= event.capacity) {
+      if (taken >= locked.capacity) {
         throw new ConflictError("This event is full");
       }
     }
@@ -946,6 +1022,15 @@ export async function openCheckin(
     throw new ConflictError("Check-in is already open");
   }
 
+  if (
+    event.startsAt &&
+    Date.now() < event.startsAt.getTime() - CHECKIN_LEAD_MS
+  ) {
+    throw new ConflictError(
+      "Check-in opens 24 hours before the event starts",
+    );
+  }
+
   event.checkinOpenedAt = new Date();
   await events().save(event);
 
@@ -1012,6 +1097,10 @@ export async function publishResults(
     throw new ConflictError("Open check-in before publishing results");
   }
 
+  if (event.startsAt && Date.now() < event.startsAt.getTime()) {
+    throw new ConflictError("Results cannot be published before the event starts");
+  }
+
   const named = [
     ...(input.winnerUserId
       ? [{ userId: input.winnerUserId, field: "winnerUserId" }]
@@ -1023,6 +1112,22 @@ export async function publishResults(
   ];
 
   if (named.length > 0) {
+    const leaderId = await findLeaderId(event.clubId);
+    const running = new Set(
+      [event.organizerId, leaderId].filter((id): id is string => id !== null),
+    );
+    const staff = named.filter((entry) => running.has(entry.userId));
+
+    if (staff.length > 0) {
+      throw new ValidationError(
+        "Invalid input",
+        staff.map((entry) => ({
+          field: entry.field,
+          message: "Whoever runs the event cannot be on its podium",
+        })),
+      );
+    }
+
     const attended = await registrations().findBy({
       eventId: event.id,
       studentId: In(named.map((entry) => entry.userId)),

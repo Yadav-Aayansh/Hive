@@ -184,7 +184,8 @@ function EditEventPage() {
     },
   });
 
-  const touched = form.formState.isDirty || uploadId !== null;
+  const touched =
+    form.formState.isDirty || uploadId !== null || organizer !== undefined;
 
   useUnsavedGuard(touched && !save.isPending);
 

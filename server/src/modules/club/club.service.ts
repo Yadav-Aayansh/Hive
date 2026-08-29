@@ -12,6 +12,7 @@ import {
   type MembershipRole,
   type MembershipStatus,
 } from "../../entity/ClubMembership";
+import { EventRegistration } from "../../entity/EventRegistration";
 import { User, type UserRole } from "../../entity/User";
 import {
   ConflictError,
@@ -626,5 +627,22 @@ export async function removeMember(
     throw new ConflictError("Transfer leadership before leaving this club");
   }
 
-  await memberships().delete({ id: membership.id });
+  await AppDataSource.transaction(async (manager) => {
+    await manager.delete(ClubMembership, { id: membership.id });
+
+    await manager
+      .createQueryBuilder()
+      .update(EventRegistration)
+      .set({ status: "cancelled" })
+      .where("student_id = :studentId", { studentId: targetUserId })
+      .andWhere("status = :status", { status: "registered" })
+      .andWhere(
+        `event_id IN (
+           SELECT e.id FROM events e
+           WHERE e.club_id = :clubId AND e.checkin_opened_at IS NULL
+         )`,
+        { clubId: club.id },
+      )
+      .execute();
+  });
 }

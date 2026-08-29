@@ -24,6 +24,14 @@ export async function isSessionActive(
   }
 }
 
+export async function expireSession(
+  userId: string,
+  jti: string,
+  ttlSeconds: number,
+): Promise<void> {
+  await redis.expire(key(userId, jti), ttlSeconds);
+}
+
 export async function destroySession(
   userId: string,
   jti: string,

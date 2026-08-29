@@ -8,9 +8,15 @@ import {
 } from "../utils/AppError";
 import { setAuthCookie } from "../utils/cookie";
 import { TOKEN_TTL_SECONDS, shouldRotate, signToken, verifyToken } from "../utils/jwt";
-import { createSession, isSessionActive } from "../utils/session";
+import {
+  createSession,
+  expireSession,
+  isSessionActive,
+} from "../utils/session";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+const ROTATED_GRACE_SECONDS = 60;
 
 export async function authenticate(
   req: Request,
@@ -43,6 +49,7 @@ export async function authenticate(
       collegeId: payload.collegeId,
     });
     await createSession(payload.sub, issued.jti, TOKEN_TTL_SECONDS);
+    await expireSession(payload.sub, payload.jti, ROTATED_GRACE_SECONDS);
     setAuthCookie(res, issued.token);
     req.user.jti = issued.jti;
   }
