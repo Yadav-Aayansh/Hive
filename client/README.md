@@ -12,15 +12,19 @@ React 19 single page app for Hive. Talks to the API over a cookie session.
 ```bash
 cd client
 npm install
-echo 'VITE_API_URL=http://localhost:3003/api/v1' > .env
+cp .env.example .env
 npm run dev                   # http://localhost:5173
 ```
 
-`VITE_API_URL` is required and prefixes every request. The API must allow this origin, so
-keep `CORS_ORIGIN=http://localhost:5173` in `server/.env`.
+`VITE_API_URL` is required and prefixes every request. It must match the port the API listens
+on, which is `PORT` in `server/.env`. The API must also allow this origin, so keep
+`CORS_ORIGIN=http://localhost:5173` in `server/.env`.
 
-`vite.config.ts` also proxies `/api` to `http://localhost:3003`. Set `VITE_API_URL=/api/v1`
-to use it and skip CORS in development.
+There is no dev proxy. The browser calls the API directly in development exactly as it does in
+production, so a CORS mistake surfaces here rather than after a deploy.
+
+Vite inlines `VITE_` variables at build time, so the value is fixed when `npm run build` runs,
+not when the server starts.
 
 ## Scripts
 
@@ -41,6 +45,8 @@ in the URL.
 ## Layout
 
 ```
+public/
+  _redirects    SPA fallback, see Deploying
 src/
   main.tsx      router + QueryClientProvider, wires the redirect and toast handlers
   index.css     Tailwind v4 theme
@@ -145,3 +151,17 @@ is why triggers take `render={<Link to="..." />}` rather than `asChild`.
 client never guesses at a rule.
 
 `lib/constants.ts` mirrors the server enums by hand. Update it when a server enum changes.
+
+## Deploying
+
+The build is static files. Routing is client side, so the host has to serve `index.html` for
+every path it does not recognise; without that, reloading `/events/some-slug` is a 404 because
+no such file exists on disk.
+
+`public/_redirects` holds `/*  /index.html  200`, which Cloudflare Pages and Netlify read.
+Behind nginx or Caddy the equivalent is a `try_files` fallback to `index.html`.
+
+The session cookie is `SameSite=Strict`, so the site serving this app and the API must share a
+registrable domain: `hive.example.com` with `api.hive.example.com` works, a `*.pages.dev`
+default domain with an API elsewhere does not, because `pages.dev` is its own registrable
+domain and the cookie is never sent.

@@ -10,8 +10,7 @@ Express + TypeScript backend for Hive. One college is one tenant.
 
 ## Setup
 
-Create `server/.env` from the table below first. Docker Compose reads the same file for the
-Postgres credentials.
+Copy `.env.example` to `.env` and fill it in; every variable is in the table below.
 
 ```bash
 docker compose up -d          # from the repo root
@@ -20,17 +19,28 @@ npm install
 npm run dev                   # http://localhost:3003/api/v1/health
 ```
 
-Tables are created by TypeORM `synchronize: true`, from the entity files.
+Tables are created by migrations, not by `synchronize`, which is off. `migrationsRun: true`
+applies anything pending at startup, before the server listens, so a fresh database needs no
+manual step.
 
 ## Scripts
 
 | Script | Does |
 |---|---|
 | `npm run dev` | nodemon + ts-node |
-| `npm run build` | `tsc` into `dist/` |
+| `npm run build` | clears `dist/`, then `tsc` into it |
 | `npm start` | `node dist/index.js` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` |
+| `npm run migration:generate -- src/migration/<Name>` | diff the entities against the database and write the SQL |
+| `npm run migration:run` | apply pending migrations by hand |
+| `npm run migration:revert` | roll the last one back |
+
+`build` clears `dist/` first because `tsc` never deletes stale output, and a migration left
+behind there would still be executed at startup.
+
+After changing an entity, run `migration:generate`, read the SQL, and commit it. "No changes
+in database schema were found" means the entities and the database already agree.
 
 ## Environment
 
@@ -41,11 +51,7 @@ startup.
 |---|---|---|
 | `NODE_ENV` | no | `development` |
 | `PORT` | no | `3000` |
-| `POSTGRES_HOST` | yes | |
-| `POSTGRES_PORT` | yes | |
-| `POSTGRES_USER` | yes | |
-| `POSTGRES_PASSWORD` | yes | |
-| `POSTGRES_DB` | yes | |
+| `DATABASE_URL` | no | `postgres://hive:hive@localhost:5432/hive` |
 | `REDIS_URL` | no | `redis://localhost:6379` |
 | `JWT_SECRET` | yes, 32 chars minimum | |
 | `JWT_TTL_DAYS` | no | `7` |
@@ -61,6 +67,10 @@ startup.
 `CORS_ORIGIN` is the browser origin allowed to call the API. `APP_URL` is the frontend base
 printed into certificate QR codes.
 
+TLS for Postgres is requested through the URL, not a driver setting: append `?sslmode=require`
+(managed providers hand you a string that already has it). Locally it is left off. Use
+`rediss://` for a managed Redis, since `redis://` sends the password in cleartext.
+
 ## Stack
 
 Express 5, TypeORM 1.1, Postgres 18, Redis 8 for the session allowlist, Zod 4, Cloudflare R2
@@ -75,6 +85,7 @@ src/
   config/         env, data-source, logger, redis, r2
   middlewares/    authenticate, requireRole, requireOnboarded, validate, upload, error
   entity/         10 entities, snake_case tables
+  migration/      generated, committed, applied at startup
   modules/<name>/ routes, schema, controller, service
   utils/          AppError, response, jwt, session, cookie, password, storage, email, certificate
 ```
@@ -107,7 +118,9 @@ referenced. Event capacity is held by a `pessimistic_write` lock on the event ro
 
 One JWT in an httpOnly cookie, claims `sub`, `role`, `collegeId`, `jti`. Redis holds
 `sess:<userId>:<jti>` as an allowlist, so a session can be revoked. The token is rotated on
-GET, HEAD and OPTIONS past half its lifetime, and reissued whenever a claim changes.
+GET, HEAD and OPTIONS past half its lifetime, and reissued whenever a claim changes. Rotation
+expires the previous `jti` to 60 seconds rather than deleting it, so a request already in
+flight with the old cookie does not fail.
 
 A student's college comes from their email domain at signup. A campus admin signs up with no
 college and gets `403 ONBOARDING_REQUIRED` until they create one.
@@ -212,7 +225,9 @@ unofficial clubs are approved at once. Only approved clubs can be joined or run 
 
 Both decision routes take `{status: "approved" | "rejected"}`. Leader transfer takes
 `{userId}` and the target must be an approved member. An approved leader cannot be removed
-until leadership moves. A rejected applicant can apply again.
+until leadership moves. A rejected applicant can apply again. Leaving or being kicked also
+cancels that student's registrations for the club's events that have not opened check-in; a
+frozen roster is attendance history and is left alone.
 
 `GET /clubs` query: `search`, `category`, `type`, `status`, `mine`, `sort` (`name` or
 `newest`), `page`, `limit` (max 50). Without `mine` the list is approved clubs only, and
@@ -246,15 +261,21 @@ running of the event: roster, check-in, attendance, results.
 draft -> published -> check-in opened -> results published
 ```
 
-- Publishing needs `startsAt` and `endsAt`. A cancelled event cannot be republished.
+- `startsAt` must be in the future when it is set, and still in the future at publish.
+  Publishing needs `endsAt` too. A cancelled event cannot be republished.
+- Check-in opens no earlier than 24 hours before `startsAt`. Results cannot be published
+  before `startsAt` has passed. Attendance needs check-in to be open, so it inherits both.
+- The organizer cannot register for their own event, and a student holding a live seat
+  cannot be made organizer.
 - Once published, only `description`, `venue`, `organizerUserId` and `bannerUploadId` can
   change. Publishing results locks the event.
 - Registering needs an approved membership, a published event, check-in not yet opened and a
   free seat. `capacity: null` is unlimited.
 - Cancelling your own seat stops working once check-in opens.
 - `participant` is never stored. A checked in row with no result reads as one.
-- `{winnerUserId, runnerUpUserIds}` must all be checked in. At most 10 runners up, no
-  duplicates, winner excluded. Repeating the call returns 409.
+- `{winnerUserId, runnerUpUserIds}` must all be checked in, and neither the organizer nor the
+  club leader may be on the podium. At most 10 runners up, no duplicates, winner excluded.
+  Repeating the call returns 409.
 
 `GET /events` query: `search`, `category`, `club`, `status`, `from`, `to`, `manage`,
 `registered`, `available`, `sort` (`soonest`, `latest`, `newest`), `page`, `limit` (max 50).
@@ -289,8 +310,9 @@ approved clubs, or every official club for a campus admin. Query: `search`, `clu
 
 `PUT /events/:slug/results` mints one certificate per checked in registration, in the same
 transaction, and only for an approved official club. The serial is
-`HIVE-<year>-<14 Crockford base32 characters>`, which is why verification is public and the
-only route with no college scoping.
+`HIVE-<year>-<14 Crockford base32 characters>`, which is why verification is public and
+carries no college scoping. It and `GET /colleges/:slug` are the only two unauthenticated
+routes.
 
 The PDF is drawn on first read, uploaded to R2, and the key stored. The wallet listing does
 not render, so `fileUrl` is null there until someone opens that certificate. Three designs:

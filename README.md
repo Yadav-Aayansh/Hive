@@ -10,9 +10,11 @@ official clubs.
 
 ```
 Hive/
-  server/             Express 5 + TypeScript API   (server/README.md)
-  client/             React 19 + Vite web app      (client/README.md)
-  docker-compose.yml  Postgres 18 and Redis 8
+  server/                  Express 5 + TypeScript API   (server/README.md)
+  client/                  React 19 + Vite web app      (client/README.md)
+  docker-compose.yml       Postgres 18 and Redis 8, for development
+  docker-compose.prod.yml  the API container, for a deployed VM
+  server/Dockerfile        multi-stage build of that container
 ```
 
 ## Requirements
@@ -28,9 +30,12 @@ git clone git@github.com:Yadav-Aayansh/Hive.git
 cd Hive
 ```
 
-**1.** Create `server/.env`. Every variable is listed in
-[`server/README.md`](server/README.md#environment). Docker Compose reads the same file for
-the Postgres credentials, so it has to exist first.
+**1.** Create `server/.env` from the template. Every variable is listed in
+[`server/README.md`](server/README.md#environment).
+
+```bash
+cp server/.env.example server/.env      # then fill in JWT_SECRET and the R2 keys
+```
 
 **2.** Start the databases.
 
@@ -51,9 +56,11 @@ npm run dev                   # http://localhost:3003/api/v1/health
 ```bash
 cd client
 npm install
-echo 'VITE_API_URL=http://localhost:3003/api/v1' > .env
+cp .env.example .env
 npm run dev                   # http://localhost:5173
 ```
+
+The database schema is created by migrations, which run automatically at API startup.
 
 ## First run
 
@@ -63,6 +70,10 @@ npm run dev                   # http://localhost:5173
 4. Create a club. Unofficial clubs are live at once, official ones wait for approval.
 5. Create an event under a club you lead, publish it, open check-in, mark attendance, publish
    results. An approved official club mints certificates at that point.
+
+The event lifecycle is gated on the clock, so to walk all of step 5 in one sitting give the
+event a start time **within the next 24 hours**: check-in opens no earlier than 24 hours
+before the start, and results cannot be published until the start has passed.
 
 ## Roles
 
@@ -91,9 +102,14 @@ Same names on both sides.
 | | `server/` | `client/` |
 |---|---|---|
 | `npm run dev` | nodemon + ts-node | vite dev server |
-| `npm run build` | `tsc` into `dist/` | `tsc -b` then `vite build` |
+| `npm run build` | clears `dist/`, then `tsc` | `tsc -b` then `vite build` |
+| `npm start` | `node dist/index.js` | — |
+| `npm run preview` | — | serve the built `dist/` |
 | `npm run typecheck` | `tsc --noEmit` | `tsc -b` |
 | `npm run lint` | eslint | eslint |
+
+`server/` also has `migration:generate`, `migration:run` and `migration:revert`. See
+[`server/README.md`](server/README.md#scripts).
 
 ## Contract
 
@@ -109,6 +125,24 @@ field error looks the same wherever it came from.
 
 Tenancy is structural. `collegeId` is a JWT claim, lookups are `(collegeId, key)`, and
 foreign keys point at composite uniques, so a row from another college cannot be referenced.
+
+## Deploying
+
+Postgres and Redis are managed services in production, not containers. The API is one
+container behind a reverse proxy that terminates TLS; the client is static files on a CDN.
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+That builds `server/Dockerfile` and publishes the API on `127.0.0.1:3000` only, so nothing but
+the proxy on that host can reach it. Migrations run at startup, so a fresh database needs no
+extra step. Point `DATABASE_URL` and `REDIS_URL` at the managed instances, and set
+`CORS_ORIGIN` and `APP_URL` to the deployed client.
+
+The session cookie is `SameSite=Strict`, so the client and the API must share a registrable
+domain — `hive.example.com` with `api.hive.example.com`. A platform's default domain such as
+`*.pages.dev` is its own registrable domain, so the cookie would never be sent.
 
 ## License
 
