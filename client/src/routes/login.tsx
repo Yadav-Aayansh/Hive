@@ -107,7 +107,15 @@ function LoginPage() {
           </Field>
 
           <Field className="gap-2" data-invalid={!!errors.password}>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <div className="flex items-center justify-between gap-3">
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <Link
+                to="/forgot-password"
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <PasswordInput
               id="password"
               autoComplete="current-password"

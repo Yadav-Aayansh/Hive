@@ -23,3 +23,20 @@ export function signup(input: SignupInput): Promise<{ user: UserDto }> {
 export function logout(): Promise<{ message: string }> {
   return api.post<{ message: string }>("/auth/logout");
 }
+
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  password: string;
+}
+
+export function forgotPassword(input: ForgotPasswordInput) {
+  return api.post<{ message: string }>("/auth/forgot-password", input);
+}
+
+export function resetPassword(input: ResetPasswordInput) {
+  return api.post<{ message: string }>("/auth/reset-password", input);
+}

@@ -1,4 +1,5 @@
 import { AppDataSource } from "../../config/data-source";
+import { env } from "../../config/env";
 import { College } from "../../entity/College";
 import { Student } from "../../entity/Student";
 import { User } from "../../entity/User";
@@ -13,10 +14,22 @@ import {
   signToken,
   type IssuedToken,
 } from "../../utils/jwt";
+import { passwordResetMail } from "../../utils/mail-template";
+import { sendMail } from "../../utils/mailer";
 import { hashPassword, verifyPassword } from "../../utils/password";
-import { createSession, destroySession } from "../../utils/session";
+import { consumeResetToken, createResetToken } from "../../utils/reset";
+import {
+  createSession,
+  destroyAllSessions,
+  destroySession,
+} from "../../utils/session";
 import { toUserDto, type UserDto } from "../user/user.service";
-import type { LoginInput, SignupInput } from "./auth.schema";
+import type {
+  ForgotPasswordInput,
+  LoginInput,
+  ResetPasswordInput,
+  SignupInput,
+} from "./auth.schema";
 
 export async function startSession(user: User): Promise<IssuedToken> {
   const issued = signToken({
@@ -118,4 +131,43 @@ export async function login(
 
 export async function logout(userId: string, jti: string): Promise<void> {
   await destroySession(userId, jti);
+}
+
+export async function forgotPassword(input: ForgotPasswordInput): Promise<void> {
+  const user = await AppDataSource.getRepository(User).findOneBy({
+    email: input.email,
+  });
+
+  if (!user) {
+    return;
+  }
+
+  const token = await createResetToken(user.id);
+  const link = `${env.APP_URL}/reset-password?token=${token}`;
+
+  await sendMail({
+    to: user.email,
+    ...passwordResetMail(user.fullName, link),
+  });
+}
+
+export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+  const userId = await consumeResetToken(input.token);
+  const users = AppDataSource.getRepository(User);
+  const user = userId ? await users.findOneBy({ id: userId }) : null;
+
+  if (!user) {
+    throw new ValidationError("Invalid input", [
+      {
+        field: "token",
+        message: "This reset link is invalid or has expired",
+      },
+    ]);
+  }
+
+  const passwordHash = await hashPassword(input.password);
+
+  await users.update({ id: user.id }, { passwordHash });
+
+  await destroyAllSessions(user.id);
 }
