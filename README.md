@@ -22,6 +22,7 @@ Hive/
 - Node 24 or newer
 - Docker
 - A Cloudflare R2 bucket with a public URL
+- An SMTP account and a Razorpay test key pair
 
 ## Run it
 
@@ -34,7 +35,7 @@ cd Hive
 [`server/README.md`](server/README.md#environment).
 
 ```bash
-cp server/.env.example server/.env      # then fill in JWT_SECRET and the R2 keys
+cp server/.env.example server/.env      # then fill in JWT_SECRET, R2, SMTP and Razorpay
 ```
 
 **2.** Start the databases.
@@ -75,11 +76,14 @@ The event lifecycle is gated on the clock, so to walk all of step 5 in one sitti
 event a start time **within the next 24 hours**: check-in opens no earlier than 24 hours
 before the start, and results cannot be published until the start has passed.
 
+A new college is on the free plan, which caps it at 3 clubs and 10 events. Lift it under
+College settings; Razorpay runs in test mode, so no real money moves.
+
 ## Roles
 
 | Role | How you get it | Can do |
 |---|---|---|
-| Campus admin | sign up, then onboard a college. One per college | approve official clubs, read their rosters and announcements, see college stats |
+| Campus admin | sign up, then onboard a college. One per college | approve official clubs, read their rosters and announcements, see college stats, upgrade the plan |
 | Student | sign up on a registered college domain | create and join clubs, register for events, collect certificates |
 | Club leader | a membership row, one per club | everything about their club and its events |
 | Event organizer | set by the leader, must be an approved member | run the event: roster, check-in, attendance, results |
@@ -92,6 +96,7 @@ Leadership is a `ClubMembership` row, so transferring it moves every permission 
 |---|---|
 | API | Node 24, Express 5, TypeORM 1.1, Postgres 18, Redis 8, Zod 4 |
 | Storage | Cloudflare R2, sharp for images, pdfkit and qrcode for certificates |
+| Email and payments | nodemailer over SMTP, Razorpay in test mode |
 | Auth | JWT in an httpOnly cookie, Redis session allowlist, bcryptjs |
 | Web | React 19, Vite 8, TanStack Router and Query, react-hook-form, Tailwind v4, shadcn |
 

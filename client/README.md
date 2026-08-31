@@ -78,6 +78,8 @@ on 401 and to `/onboarding` if the user has no college, then renders the sidebar
 | `/` | public | landing |
 | `/login` | public | sign in |
 | `/signup` | public | two step, role then details |
+| `/forgot-password` | public | request a reset link |
+| `/reset-password` | public | set a new password from `?token` |
 | `/onboarding` | campus admin without a college | create the college |
 | `/verify/$serial` | public | certificate verification |
 | `/dashboard` | any | role aware |
@@ -96,7 +98,7 @@ on 401 and to `/onboarding` if the user has no college, then renders the sidebar
 | `/certificates` | student | wallet |
 | `/notifications` | any | feed |
 | `/profile` | any | profile and avatar |
-| `/college` | campus admin | college settings |
+| `/college` | campus admin | college settings and plan |
 | `/users/$id` | any | public profile |
 
 `/college` and the edit and manage routes throw `notFound()` when the viewer lacks the role.

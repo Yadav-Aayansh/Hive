@@ -7,6 +7,8 @@ Express + TypeScript backend for Hive. One college is one tenant.
 - Node 24 or newer
 - Docker, for Postgres and Redis
 - A Cloudflare R2 bucket with a public URL
+- An SMTP account, for password reset email
+- A Razorpay test key pair, for plan checkout
 
 ## Setup
 
@@ -58,6 +60,13 @@ startup.
 | `COOKIE_NAME` | no | `hive_token` |
 | `CORS_ORIGIN` | no | `http://localhost:5173` |
 | `APP_URL` | no | `http://localhost:5173` |
+| `SMTP_HOST` | yes | |
+| `SMTP_PORT` | no | `587` |
+| `SMTP_USER` | yes | |
+| `SMTP_PASS` | yes | |
+| `MAIL_FROM` | yes | |
+| `RAZORPAY_KEY_ID` | yes | |
+| `RAZORPAY_KEY_SECRET` | yes | |
 | `R2_ACCOUNT_ID` | yes | |
 | `R2_ACCESS_KEY_ID` | yes | |
 | `R2_SECRET_ACCESS_KEY` | yes | |
@@ -65,7 +74,10 @@ startup.
 | `R2_PUBLIC_URL` | yes | |
 
 `CORS_ORIGIN` is the browser origin allowed to call the API. `APP_URL` is the frontend base
-printed into certificate QR codes.
+printed into certificate QR codes and password reset links.
+
+`MAIL_FROM` has to be an address the SMTP provider will send for, which usually means a
+verified domain. Port 465 switches the transport to implicit TLS, anything else uses STARTTLS.
 
 TLS for Postgres is requested through the URL, not a driver setting: append `?sslmode=require`
 (managed providers hand you a string that already has it). Locally it is left off. Use
@@ -73,8 +85,9 @@ TLS for Postgres is requested through the URL, not a driver setting: append `?ss
 
 ## Stack
 
-Express 5, TypeORM 1.1, Postgres 18, Redis 8 for the session allowlist, Zod 4, Cloudflare R2
-with sharp, bcryptjs, jsonwebtoken, pino, helmet, pdfkit and qrcode.
+Express 5, TypeORM 1.1, Postgres 18, Redis 8 for the session allowlist, reset tokens and a
+small response cache, Zod 4, Cloudflare R2 with sharp, bcryptjs, jsonwebtoken, nodemailer,
+pino, helmet, pdfkit and qrcode.
 
 ## Layout
 
@@ -87,7 +100,8 @@ src/
   entity/         10 entities, snake_case tables
   migration/      generated, committed, applied at startup
   modules/<name>/ routes, schema, controller, service
-  utils/          AppError, response, jwt, session, cookie, password, storage, email, certificate
+  utils/          AppError, response, jwt, session, reset, cookie, password, storage, email,
+                  mailer, mail-template, certificate, razorpay, cache
 ```
 
 Every module is four files. Routes wire the middleware, schemas hold the Zod validation,
@@ -114,6 +128,9 @@ approved leader per club, one roll number per college, one certificate per regis
 Foreign keys point at composite uniques, so a row from another college cannot be
 referenced. Event capacity is held by a `pessimistic_write` lock on the event row.
 
+A college is `free` or `pro`. Free caps it at 3 clubs and 10 events. That one is a service
+check rather than a constraint, because a quota counts rows in another table.
+
 ## Auth
 
 One JWT in an httpOnly cookie, claims `sub`, `role`, `collegeId`, `jti`. Redis holds
@@ -127,6 +144,22 @@ college and gets `403 ONBOARDING_REQUIRED` until they create one.
 
 Crossing a college boundary returns 404. Unknown email and wrong password return the same
 error.
+
+A forgotten password is reset over email. `forgot-password` stores `reset:<sha256(token)>`
+in Redis for 30 minutes and mails the raw token, so the store never holds a working link.
+`reset-password` spends it with `GETDEL`, rehashes, and destroys every session for that user.
+
+## Caching
+
+Redis also caches two read-only responses: `GET /colleges/stats` for 120 seconds and
+`GET /colleges/:slug` for 300 seconds. Both are dropped by the writes that change them, so
+club and event lifecycle actions, a plan upgrade and a college edit all invalidate at once.
+
+The club and event lists are not cached. Every row carries a `viewer` block, so one shared
+entry would hand your membership and registrations to the next reader.
+
+A cache read or write that fails is logged and ignored, unlike the session check, which fails
+closed.
 
 ## Response contract
 
@@ -176,10 +209,15 @@ Base URL `/api/v1`. Auth is the cookie. "Onboarded" means signed in with a `coll
 |---|---|---|---|
 | POST | `/auth/signup` | public | `{role, email, password, fullName}` |
 | POST | `/auth/login` | public | `{email, password}` |
+| POST | `/auth/forgot-password` | public | `{email}` |
+| POST | `/auth/reset-password` | public | `{token, password}` |
 | POST | `/auth/logout` | signed in | |
 
 `role` is `student` or `campus_admin`. Password 8 to 72 characters. Signup and login set the
 cookie. A student signup fails if no college matches their email domain.
+
+`forgot-password` answers 200 whether or not the address is registered, so the response
+cannot be used to find accounts. The emailed link is single use and expires in 30 minutes.
 
 ### Users
 
@@ -197,12 +235,20 @@ cookie. A student signup fails if no college matches their email domain.
 |---|---|---|---|
 | POST | `/colleges` | campus admin | `{name, slug, domain, description?, logoUploadId?}` |
 | GET | `/colleges/stats` | campus admin, onboarded | |
+| POST | `/colleges/checkout` | campus admin, onboarded | |
+| POST | `/colleges/checkout/verify` | campus admin, onboarded | `{orderId, paymentId, signature}` |
 | GET | `/colleges/:slug` | public | |
 | PATCH | `/colleges/:slug` | campus admin, onboarded | `name`, `description`, `logoUploadId` |
 
 `domain` must match the admin's own email domain. Onboarding reissues the cookie. `PATCH`
 works on your own college only. `stats` returns
-`{clubs: {total, pending}, events: {total, published}, members, certificates}`.
+`{clubs: {total, pending}, events: {total, published}, members, certificates, plan}`.
+
+The checkout routes take no slug; like `stats` they act on the caller's own college. Checkout
+opens a Razorpay order and stores its id. Verify checks the signature and that the id is the
+one this college was issued, so a payment raised against another order cannot be replayed.
+Paying once lifts the free caps of 3 clubs and 10 events for good. The cap is enforced when a
+student creates a club or event, so it is hit by a student and cleared by the admin.
 
 ### Clubs
 
