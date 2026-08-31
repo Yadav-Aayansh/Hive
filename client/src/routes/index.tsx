@@ -5,7 +5,7 @@ import { HiveMark } from "@/components/hive-mark";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Hive — every club, event and certificate on your campus" }] }),
+  head: () => ({ meta: [{ title: "Hive" }] }),
   component: Landing,
 });
 
