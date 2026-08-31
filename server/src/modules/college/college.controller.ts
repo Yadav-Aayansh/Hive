@@ -3,6 +3,7 @@ import { setAuthCookie } from "../../utils/cookie";
 import { sendSuccess } from "../../utils/response";
 import type {
   CollegeParams,
+  ConfirmCheckoutInput,
   OnboardingInput,
   UpdateCollegeInput,
 } from "./college.schema";
@@ -26,6 +27,19 @@ export async function detail(req: Request, res: Response) {
 export async function stats(req: Request, res: Response) {
   const stats = await collegeService.getCollegeStats(req.user!.collegeId!);
   return sendSuccess(res, { stats });
+}
+
+export async function checkout(req: Request, res: Response) {
+  const checkout = await collegeService.startCheckout(req.user!.collegeId!);
+  return sendSuccess(res, { checkout }, 201);
+}
+
+export async function confirmCheckout(req: Request, res: Response) {
+  const college = await collegeService.confirmCheckout(
+    req.user!.collegeId!,
+    req.body as ConfirmCheckoutInput,
+  );
+  return sendSuccess(res, { college });
 }
 
 export async function update(req: Request, res: Response) {

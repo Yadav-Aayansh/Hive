@@ -21,6 +21,15 @@ const envSchema = z.object({
     .default("http://localhost:5173")
     .transform((value) => value.replace(/\/+$/, "")),
 
+  SMTP_HOST: z.string().min(1),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().min(1),
+  SMTP_PASS: z.string().min(1),
+  MAIL_FROM: z.string().min(1),
+
+  RAZORPAY_KEY_ID: z.string().min(1),
+  RAZORPAY_KEY_SECRET: z.string().min(1),
+
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),
   R2_SECRET_ACCESS_KEY: z.string().min(1),

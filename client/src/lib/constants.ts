@@ -60,6 +60,8 @@ export const STUDENT_BRANCHES = [
 
 export const USER_ROLES = ["campus_admin", "student"] as const;
 
+export const COLLEGE_PLANS = ["free", "pro"] as const;
+
 export const CLUB_TYPES = ["official", "unofficial"] as const;
 
 export const CLUB_STATUSES = ["pending", "approved", "rejected"] as const;
@@ -83,6 +85,7 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 export type UploadPurpose = (typeof UPLOAD_PURPOSES)[number];
 export type StudentBranch = (typeof STUDENT_BRANCHES)[number];
 export type UserRole = (typeof USER_ROLES)[number];
+export type CollegePlan = (typeof COLLEGE_PLANS)[number];
 export type ClubType = (typeof CLUB_TYPES)[number];
 export type ClubStatus = (typeof CLUB_STATUSES)[number];
 export type EventStatus = (typeof EVENT_STATUSES)[number];

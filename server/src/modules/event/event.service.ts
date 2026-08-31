@@ -24,9 +24,11 @@ import {
   NotFoundError,
   ValidationError,
 } from "../../utils/AppError";
+import { cacheKeys, drop } from "../../utils/cache";
 import { deleteObjectQuietly, objectKey, publicUrl } from "../../utils/storage";
 import { mintCertificates } from "../certificate/certificate.service";
 import { findClubMembership, requireClubLeader } from "../club/club.service";
+import { assertPlanCapacity } from "../college/college.service";
 import { notify } from "../notification/notification.service";
 import { attachUpload } from "../upload/upload.service";
 import type {
@@ -419,6 +421,8 @@ export async function createEvent(
     throw new ConflictError("An event with this slug already exists");
   }
 
+  await assertPlanCapacity(actor.collegeId, "events");
+
   const startsAt = input.startsAt ?? null;
   const endsAt = input.endsAt ?? null;
 
@@ -456,6 +460,8 @@ export async function createEvent(
   );
 
   event.club = club;
+
+  await drop(cacheKeys.collegeStats(actor.collegeId));
 
   return detailFor(actor, event as Event & { club: Club }, {
     role: "leader",
@@ -782,6 +788,8 @@ export async function setEventStatus(
   event.status = status;
   await events().save(event);
 
+  await drop(cacheKeys.collegeStats(actor.collegeId));
+
   if (status === "published") {
     const audience = await AppDataSource.getRepository(ClubMembership).find({
       where: {
@@ -822,6 +830,9 @@ export async function deleteEvent(actor: Actor, slug: string): Promise<void> {
   }
 
   await events().delete({ id: event.id });
+
+  await drop(cacheKeys.collegeStats(actor.collegeId));
+
   await deleteObjectQuietly(event.bannerKey);
 }
 
@@ -1177,6 +1188,8 @@ export async function publishResults(
   });
 
   event.resultsPublishedAt = publishedAt;
+
+  await drop(cacheKeys.collegeStats(actor.collegeId));
 
   await notify(await activeRegistrantIds(event.id), {
     type: "results_published",

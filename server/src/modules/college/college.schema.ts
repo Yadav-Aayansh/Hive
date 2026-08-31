@@ -55,6 +55,17 @@ export const updateCollegeSchema = z
     message: "Provide at least one field to update",
   });
 
+export const confirmCheckoutSchema = z.object({
+  orderId: z.string().trim().min(1).max(64),
+  paymentId: z.string().trim().min(1).max(64),
+  signature: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-f0-9]{64}$/, "Not a valid payment signature"),
+});
+
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
+export type ConfirmCheckoutInput = z.infer<typeof confirmCheckoutSchema>;
 export type CollegeParams = z.infer<typeof collegeParamsSchema>;
 export type UpdateCollegeInput = z.infer<typeof updateCollegeSchema>;

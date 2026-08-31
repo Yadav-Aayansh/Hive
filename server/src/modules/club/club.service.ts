@@ -20,7 +20,9 @@ import {
   NotFoundError,
   ValidationError,
 } from "../../utils/AppError";
+import { cacheKeys, drop } from "../../utils/cache";
 import { deleteObjectQuietly, objectKey, publicUrl } from "../../utils/storage";
+import { assertPlanCapacity } from "../college/college.service";
 import { notify } from "../notification/notification.service";
 import { attachUpload } from "../upload/upload.service";
 import type {
@@ -175,6 +177,8 @@ export async function createClub(
     throw new ConflictError("A club with this slug already exists");
   }
 
+  await assertPlanCapacity(actor.collegeId, "clubs");
+
   const status: ClubStatus = input.type === "official" ? "pending" : "approved";
 
   const clubId = crypto.randomUUID();
@@ -216,6 +220,8 @@ export async function createClub(
 
     return club;
   });
+
+  await drop(cacheKeys.collegeStats(actor.collegeId));
 
   return toClubDto(club, 1, { role: "leader", status: "approved" });
 }
@@ -386,6 +392,8 @@ export async function decideClub(
 
   club.status = status;
   await clubs().save(club);
+
+  await drop(cacheKeys.collegeStats(actor.collegeId));
 
   const [memberCount, leader] = await Promise.all([
     countApprovedMembers(club.id),

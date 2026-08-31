@@ -8,6 +8,7 @@ import { validate } from "../../middlewares/validate";
 import * as collegeController from "./college.controller";
 import {
   collegeParamsSchema,
+  confirmCheckoutSchema,
   onboardingSchema,
   updateCollegeSchema,
 } from "./college.schema";
@@ -28,6 +29,23 @@ collegeRouter.get(
   requireRole("campus_admin"),
   requireOnboarded,
   collegeController.stats,
+);
+
+collegeRouter.post(
+  "/checkout",
+  authenticate,
+  requireRole("campus_admin"),
+  requireOnboarded,
+  collegeController.checkout,
+);
+
+collegeRouter.post(
+  "/checkout/verify",
+  authenticate,
+  requireRole("campus_admin"),
+  requireOnboarded,
+  validate(confirmCheckoutSchema),
+  collegeController.confirmCheckout,
 );
 
 collegeRouter.get(

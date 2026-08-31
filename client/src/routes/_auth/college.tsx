@@ -3,15 +3,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import {
   BuildingIcon,
+  CalendarDaysIcon,
+  SparklesIcon,
   UploadIcon,
+  type LucideIcon,
 } from "lucide-react";
 import { IconInput } from "@/components/icon-input";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { PageHeader, PageShell, SectionCard } from "@/components/dashboard-kit";
+import { AccentBand, IconChip, MetaChip } from "@/components/entity-kit";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Field,
   FieldDescription,
@@ -28,15 +35,57 @@ import { useMe } from "@/lib/queries/me";
 import { applyFieldErrors } from "@/lib/form";
 import {
   collegeQueryOptions,
+  collegeStatsQueryOptions,
+  confirmCheckout,
+  startCheckout,
   updateCollege,
   type UpdateCollegeInput,
 } from "@/lib/queries/colleges";
 import { uploadFile } from "@/lib/queries/uploads";
+import { cn } from "@/lib/utils";
 
 const collegeSchema = z.object({
   name: z.string().trim().max(160),
   description: z.string().trim().max(2000),
 });
+
+const CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+
+interface RazorpayResponse {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  name: string;
+  description: string;
+  handler: (response: RazorpayResponse) => void;
+  modal?: { ondismiss?: () => void };
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayOptions) => { open: () => void };
+  }
+}
+
+function loadCheckout(): Promise<void> {
+  if (window.Razorpay) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = CHECKOUT_SCRIPT;
+    script.onload = () => resolve();
+    script.onerror = () =>
+      reject(new Error("Could not reach the payment gateway"));
+    document.body.appendChild(script);
+  });
+}
 
 type CollegeValues = z.infer<typeof collegeSchema>;
 
@@ -121,6 +170,8 @@ function CollegePage() {
     <PageShell size="narrow">
       <PageHeader title="College settings" />
 
+      <PlanCard />
+
       <SectionCard
         title="Details"
         description="The slug and email domain are fixed once the college exists"
@@ -204,5 +255,182 @@ function CollegePage() {
         </div>
       </SectionCard>
     </PageShell>
+  );
+}
+
+function UsageRow({
+  icon,
+  label,
+  used,
+  limit,
+}: {
+  icon: LucideIcon;
+  label: string;
+  used: number;
+  limit: number;
+}) {
+  const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  const full = used >= limit;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <MetaChip icon={icon}>{label}</MetaChip>
+        <span
+          className={cn(
+            "text-xs tabular-nums",
+            full ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {used} of {limit}
+        </span>
+      </div>
+      <span className="block h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <span
+          className={cn(
+            "block h-full rounded-full transition-[width] duration-500",
+            full ? "bg-destructive/70" : "bg-primary",
+          )}
+          style={{ width: `${percent}%` }}
+        />
+      </span>
+    </div>
+  );
+}
+
+function PlanCard() {
+  const queryClient = useQueryClient();
+  const stats = useQuery(collegeStatsQueryOptions);
+
+  const upgrade = useMutation({
+    mutationFn: async () => {
+      const { checkout } = await startCheckout();
+      await loadCheckout();
+
+      return new Promise<boolean>((resolve, reject) => {
+        const Checkout = window.Razorpay;
+
+        if (!Checkout) {
+          reject(new Error("Could not reach the payment gateway"));
+          return;
+        }
+
+        new Checkout({
+          key: checkout.keyId,
+          amount: checkout.amount,
+          currency: checkout.currency,
+          order_id: checkout.orderId,
+          name: "Hive",
+          description: "Pro plan",
+          handler: (response) => {
+            confirmCheckout({
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+            })
+              .then(() => resolve(true))
+              .catch(reject);
+          },
+          modal: { ondismiss: () => resolve(false) },
+        }).open();
+      });
+    },
+    onSuccess: (paid) => {
+      if (!paid) return;
+
+      void queryClient.invalidateQueries({ queryKey: ["colleges"] });
+      toast.add({ title: "Your college is on the Pro plan", type: "success" });
+    },
+    onError: (error) => {
+      toast.add({
+        title: isApiError(error)
+          ? error.message
+          : "Could not complete the payment",
+        type: "error",
+      });
+    },
+  });
+
+  if (stats.isPending) {
+    return <Skeleton className="h-52 w-full rounded-2xl" />;
+  }
+
+  if (!stats.data) {
+    return null;
+  }
+
+  const { plan, clubs, events } = stats.data.stats;
+  const pro = plan.name === "pro";
+
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <AccentBand accent={pro ? "a1" : "a4"} className="h-20">
+        <div className="absolute inset-x-5 top-4 flex items-start justify-between gap-2">
+          <IconChip icon={pro ? SparklesIcon : BuildingIcon} className="size-9" />
+          <Badge className="bg-background/85 text-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm">
+            {pro ? "Pro" : "Free"}
+          </Badge>
+        </div>
+      </AccentBand>
+
+      <div className="flex flex-col gap-4 px-5 pt-4 pb-5">
+        <div>
+          <h2 className="font-heading text-section">
+            {pro ? "Pro plan" : "Free plan"}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {pro
+              ? "No limit on the clubs and events your college can run"
+              : "Students cannot create more once a limit is reached"}
+          </p>
+        </div>
+
+        {pro ? (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-4">
+            <MetaChip icon={BuildingIcon}>
+              {clubs.total} {clubs.total === 1 ? "club" : "clubs"}
+            </MetaChip>
+            <MetaChip icon={CalendarDaysIcon}>
+              {events.total} {events.total === 1 ? "event" : "events"}
+            </MetaChip>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-3.5">
+              {plan.clubLimit === null ? null : (
+                <UsageRow
+                  icon={BuildingIcon}
+                  label="Clubs"
+                  used={clubs.total}
+                  limit={plan.clubLimit}
+                />
+              )}
+              {plan.eventLimit === null ? null : (
+                <UsageRow
+                  icon={CalendarDaysIcon}
+                  label="Events"
+                  used={events.total}
+                  limit={plan.eventLimit}
+                />
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <p className="text-xs text-muted-foreground">
+                One payment, no limits after that
+              </p>
+              <Button
+                disabled={upgrade.isPending}
+                loading={upgrade.isPending}
+                onClick={() => upgrade.mutate()}
+              >
+                <SparklesIcon />
+                {upgrade.isPending ? "Opening checkout" : "Upgrade to Pro"}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }
