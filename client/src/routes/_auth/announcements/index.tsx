@@ -29,7 +29,6 @@ import {
   SearchField,
 } from "@/components/dashboard-kit";
 import {
-  AccentRail,
   GroupHeading,
   HexCrest,
 } from "@/components/entity-kit";
@@ -56,7 +55,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
-import { accentOf } from "@/lib/category";
 import { isApiError } from "@/lib/errors";
 import { applyFieldErrors } from "@/lib/form";
 import {
@@ -122,40 +120,35 @@ function AnnouncementCard({
 }: {
   announcement: AnnouncementDto;
 }) {
-  const accent = accentOf(announcement.club.slug);
-
   return (
-    <Card className="group/post relative gap-0 py-0 transition-shadow hover:shadow-lg">
-      <AccentRail accent={accent} />
-
-      <div className="flex flex-col gap-2.5 py-5 pr-5 pl-6">
-        <div className="flex items-center gap-3">
-          <HexCrest name={announcement.club.name} className="size-9" />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">
-              {announcement.club.name}
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {announcement.author.fullName} ·{" "}
-              {formatDistanceToNow(new Date(announcement.createdAt), {
-                addSuffix: true,
-              })}
-            </p>
-          </div>
+    <Card className="group/post relative flex flex-col gap-4 p-5 transition-shadow hover:shadow-lg">
+      <div className="flex items-center gap-3">
+        <HexCrest name={announcement.club.name} className="size-10" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">
+            {announcement.club.name}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {announcement.author.fullName} ·{" "}
+            {formatDistanceToNow(new Date(announcement.createdAt), {
+              addSuffix: true,
+            })}
+          </p>
         </div>
+      </div>
 
-        <h3 className="font-heading text-entry">
+      <div className="flex flex-col gap-1.5">
+        <h3 className="font-heading text-lg font-semibold text-foreground">
           {announcement.title}
         </h3>
-
         <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
           {announcement.body}
         </p>
+      </div>
 
-        <span className="mt-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary transition-transform group-hover/post:translate-x-0.5">
-          Read the full post
-          <ArrowRightIcon className="size-3.5" />
-        </span>
+      <div className="mt-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary transition-transform group-hover/post:translate-x-0.5">
+        Read announcement
+        <ArrowRightIcon className="size-3.5" />
       </div>
 
       <Link
