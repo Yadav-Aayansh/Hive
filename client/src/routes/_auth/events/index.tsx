@@ -56,7 +56,12 @@ import { EVENT_CATEGORIES, EVENT_STATUSES } from "@/lib/constants";
 import { isApiError } from "@/lib/errors";
 import { optimisticRegister, restore } from "@/lib/optimistic";
 import { labelOf } from "@/lib/labels";
-import { canCreateEvent, canRegister, isStudent } from "@/lib/permissions";
+import {
+  canCreateEvent,
+  canRegister,
+  isStudent,
+  registerBlock,
+} from "@/lib/permissions";
 import { clubsQueryOptions } from "@/lib/queries/clubs";
 import {
   eventKeys,
@@ -240,8 +245,6 @@ function EventFoot({
   handler?: RegisterHandler;
 }) {
   const registration = event.viewer.registration;
-  const full =
-    event.capacity !== null && event.registeredCount >= event.capacity;
 
   if (registration?.status === "checked_in") {
     return (
@@ -266,18 +269,24 @@ function EventFoot({
       <Button
         size="sm"
         className="relative z-10"
-        disabled={full || handler.pendingSlug === event.slug}
+        disabled={handler.pendingSlug === event.slug}
         onClick={(clicked) => {
           clicked.preventDefault();
           handler.register(event.slug);
         }}
       >
-        {full
-          ? "Full"
-          : handler.pendingSlug === event.slug
-            ? "Registering"
-            : "Register"}
+        {handler.pendingSlug === event.slug ? "Registering" : "Register"}
       </Button>
+    );
+  }
+
+  const blocked = registerBlock(user, event);
+
+  if (blocked) {
+    return (
+      <span className="text-xs font-medium text-muted-foreground">
+        {blocked}
+      </span>
     );
   }
 
@@ -593,7 +602,10 @@ function EventsPage() {
     : undefined;
 
   const setFilter = (patch: Partial<EventSearch>) => {
-    void navigate({ search: (prev) => ({ ...prev, ...patch, page: 1 }) });
+    void navigate({
+      search: (prev) => ({ ...prev, ...patch, page: 1 }),
+      resetScroll: false,
+    });
   };
 
   const setScope = (next: string) => {
@@ -874,6 +886,7 @@ function EventsPage() {
                   onChange={(next) =>
                     void navigate({
                       search: (prev) => ({ ...prev, page: next }),
+                      resetScroll: false,
                     })
                   }
                 />

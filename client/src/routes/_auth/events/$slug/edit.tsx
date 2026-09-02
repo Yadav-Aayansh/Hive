@@ -227,7 +227,7 @@ function EditEventPage() {
     (member) => member.status === "approved",
   );
   const organizerItems = [
-    { value: NONE, label: "No organizer" },
+    ...(published ? [] : [{ value: NONE, label: "No organizer" }]),
     ...approved.map((member) => ({
       value: member.userId,
       label: member.fullName,
@@ -353,8 +353,9 @@ function EditEventPage() {
                   )}
                 />
                 <FieldDescription>
-                  Shares every manage action with you. Must be an approved club
-                  member.
+                  Runs the event and shares every manage action with you. Must be
+                  an approved club member, is required before publishing, and
+                  cannot register for the event.
                 </FieldDescription>
               </Field>
 

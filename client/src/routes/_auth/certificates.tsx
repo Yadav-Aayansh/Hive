@@ -140,7 +140,9 @@ function CertificatesPage() {
             <Pagination
               page={search.page}
               lastPage={lastPage}
-              onChange={(next) => void navigate({ search: { page: next } })}
+              onChange={(next) =>
+                void navigate({ search: { page: next }, resetScroll: false })
+              }
             />
           </>
         ) : (

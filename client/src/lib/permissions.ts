@@ -71,20 +71,41 @@ function hasNoActiveSeat(event: EventDto): boolean {
   return registration === null || registration.status === "cancelled";
 }
 
+export function isEventFull(event: EventDto): boolean {
+  return event.capacity !== null && event.registeredCount >= event.capacity;
+}
+
+export function registrationClosed(event: EventDto): boolean {
+  return event.checkinOpenedAt !== null;
+}
+
 export function canRegister(user: UserDto, event: EventDto): boolean {
   return (
     isStudent(user) &&
     event.status === "published" &&
+    !registrationClosed(event) &&
+    !event.viewer.isOrganizer &&
+    !isEventFull(event) &&
     event.viewer.membership === "approved" &&
     hasNoActiveSeat(event)
   );
+}
+
+export function registerBlock(user: UserDto, event: EventDto): string | null {
+  if (!isStudent(user) || event.status !== "published") return null;
+  if (!hasNoActiveSeat(event)) return null;
+  if (event.viewer.isOrganizer) return "You are organizing this event";
+  if (registrationClosed(event)) return "Registration closed";
+  if (isEventFull(event)) return "Event full";
+  return null;
 }
 
 export function canCancelRegistration(user: UserDto, event: EventDto): boolean {
   return (
     isStudent(user) &&
     event.viewer.registration?.status === "registered" &&
-    event.status === "published"
+    event.status === "published" &&
+    !registrationClosed(event)
   );
 }
 

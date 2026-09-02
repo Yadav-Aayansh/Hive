@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { ArrowLeftIcon, CheckIcon, UsersIcon } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeftIcon, CheckIcon, InfoIcon, UsersIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { z } from "zod";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
@@ -193,13 +193,20 @@ function ManagePage() {
   const event = data.event;
   const rows = roster.data?.registrations ?? [];
   const resultsPublished = event.results !== null;
+  const competing =
+    event.viewer.registration !== null &&
+    event.viewer.registration.status !== "cancelled";
+  const needsOrganizer = event.organizer === null;
   const checkinOpen =
     resultsPublished ||
     openedLocally ||
     rows.some((row) => row.checkedInAt !== null);
 
   const setFilter = (patch: Partial<typeof search>) => {
-    void navigate({ search: (prev) => ({ ...prev, ...patch, page: 1 }) });
+    void navigate({
+      search: (prev) => ({ ...prev, ...patch, page: 1 }),
+      resetScroll: false,
+    });
   };
 
   const lastPage = roster.data
@@ -217,7 +224,11 @@ function ManagePage() {
         title={event.title}
         description={event.club.name}
       >
-          {event.viewer.manages && event.status === "draft" ? (
+          {event.viewer.manages && event.status === "draft" && needsOrganizer ? (
+            <Button disabled>Publish event</Button>
+          ) : null}
+
+          {event.viewer.manages && event.status === "draft" && !needsOrganizer ? (
             <ConfirmDialog
               trigger={<Button disabled={lifecycle.isPending} loading={lifecycle.isPending} />}
               triggerLabel={
@@ -245,7 +256,10 @@ function ManagePage() {
               <Button
                 variant="outline"
                 disabled={
-                  open.isPending || checkinOpen || event.status !== "published"
+                  open.isPending ||
+                  checkinOpen ||
+                  competing ||
+                  event.status !== "published"
                 }
               />
             }
@@ -265,10 +279,33 @@ function ManagePage() {
 
           <PublishResultsDialog
             slug={slug}
-            disabled={!checkinOpen || resultsPublished}
+            disabled={!checkinOpen || resultsPublished || competing}
             onDone={invalidate}
           />
       </PageHeader>
+
+      {needsOrganizer && event.status === "draft" ? (
+        <Notice>
+          Name an organizer before publishing. Pick yourself or any approved club
+          member on the{" "}
+          <Link
+            to="/events/$slug/edit"
+            params={{ slug }}
+            className="underline underline-offset-2"
+          >
+            edit page
+          </Link>
+          .
+        </Notice>
+      ) : null}
+
+      {competing ? (
+        <Notice>
+          You are registered for this event, so you cannot open check-in, mark
+          attendance or publish results. The organizer handles those, or cancel
+          your seat to run it yourself.
+        </Notice>
+      ) : null}
 
       <Stages
         status={event.status}
@@ -386,7 +423,10 @@ function ManagePage() {
             page={search.page}
             lastPage={lastPage}
             onChange={(next) =>
-              void navigate({ search: (prev) => ({ ...prev, page: next }) })
+              void navigate({
+                search: (prev) => ({ ...prev, page: next }),
+                resetScroll: false,
+              })
             }
           />
         </>
@@ -641,6 +681,15 @@ function PublishResultsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Notice({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex gap-2 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
+      <InfoIcon className="mt-0.5 size-4 shrink-0" />
+      <p>{children}</p>
+    </div>
   );
 }
 

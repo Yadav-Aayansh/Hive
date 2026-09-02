@@ -534,7 +534,10 @@ function ClubsPage() {
     : undefined;
 
   const setFilter = (patch: Partial<typeof search>) => {
-    void navigate({ search: (prev) => ({ ...prev, ...patch, page: 1 }) });
+    void navigate({
+      search: (prev) => ({ ...prev, ...patch, page: 1 }),
+      resetScroll: false,
+    });
   };
 
   const lastPage = browse.data
@@ -687,6 +690,7 @@ function ClubsPage() {
                   onChange={(next) =>
                     void navigate({
                       search: (prev) => ({ ...prev, page: next }),
+                      resetScroll: false,
                     })
                   }
                 />

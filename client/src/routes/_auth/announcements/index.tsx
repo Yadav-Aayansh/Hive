@@ -188,7 +188,10 @@ function AnnouncementsPage() {
   const lastPage = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
   const setFilter = (patch: { search?: string; club?: string }) => {
-    void navigate({ search: (prev) => ({ ...prev, ...patch, page: 1 }) });
+    void navigate({
+      search: (prev) => ({ ...prev, ...patch, page: 1 }),
+      resetScroll: false,
+    });
   };
 
   return (
@@ -278,7 +281,10 @@ function AnnouncementsPage() {
                 page={search.page}
                 lastPage={lastPage}
                 onChange={(next) =>
-                  void navigate({ search: (prev) => ({ ...prev, page: next }) })
+                  void navigate({
+                    search: (prev) => ({ ...prev, page: next }),
+                    resetScroll: false,
+                  })
                 }
               />
             </Card>

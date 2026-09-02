@@ -47,6 +47,7 @@ export interface EventDto {
   endsAt: string | null;
   capacity: number | null;
   status: EventStatus;
+  checkinOpenedAt: string | null;
   registeredCount: number;
   club: EventClubDto;
   viewer: EventViewer;

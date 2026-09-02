@@ -43,6 +43,7 @@ import {
   canRegister,
   canRunEvent,
   needsMembershipToRegister,
+  registerBlock,
 } from "@/lib/permissions";
 import {
   cancelRegistration,
@@ -149,8 +150,7 @@ function EventDetailPage() {
   const meta = EVENT_CATEGORY_META[event.category];
   const starts = event.startsAt ? new Date(event.startsAt) : null;
   const registration = event.viewer.registration;
-  const isFull =
-    event.capacity !== null && event.registeredCount >= event.capacity;
+  const blocked = registerBlock(user, event);
   const busy = register.isPending || cancel.isPending;
 
   const header = (
@@ -267,17 +267,14 @@ function EventDetailPage() {
                 onConfirm={() => cancel.mutate()}
               />
             ) : canRegister(user, event) ? (
-              <Button
-                disabled={busy || isFull}
-                onClick={() => register.mutate()}
-              >
+              <Button disabled={busy} onClick={() => register.mutate()}>
                 <TicketIcon />
-                {register.isPending
-                  ? "Registering"
-                  : isFull
-                    ? "Event is full"
-                    : "Register"}
+                {register.isPending ? "Registering" : "Register"}
               </Button>
+            ) : blocked ? (
+              <Badge className="bg-background/85 text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm">
+                {blocked}
+              </Badge>
             ) : needsMembershipToRegister(user, event) ? (
               <Button
                 variant="outline"
