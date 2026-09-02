@@ -81,6 +81,7 @@ export interface EventDto {
   endsAt: Date | null;
   capacity: number | null;
   status: EventStatus;
+  checkinOpenedAt: Date | null;
   registeredCount: number;
   club: EventClubDto;
   viewer: EventViewer;
@@ -150,6 +151,7 @@ function toEventDto(
     endsAt: event.endsAt,
     capacity: event.capacity,
     status: event.status,
+    checkinOpenedAt: event.checkinOpenedAt,
     registeredCount,
     club,
     viewer,
@@ -338,6 +340,23 @@ async function requireNotRegistered(
   }
 }
 
+async function requireNotCompeting(
+  eventId: string,
+  actorId: string,
+): Promise<void> {
+  const registered = await registrations().existsBy({
+    eventId,
+    studentId: actorId,
+    status: In(ACTIVE_REGISTRATIONS),
+  });
+
+  if (registered) {
+    throw new ForbiddenError(
+      "You are registered for this event, so you cannot run it",
+    );
+  }
+}
+
 async function findLeaderId(clubId: string): Promise<string | null> {
   const leader = await AppDataSource.getRepository(ClubMembership).findOneBy({
     clubId,
@@ -445,7 +464,7 @@ export async function createEvent(
       id: eventId,
       collegeId: actor.collegeId,
       clubId: club.id,
-      organizerId: null,
+      organizerId: actor.id,
       title: input.title,
       slug: input.slug,
       description: input.description ?? null,
@@ -672,6 +691,10 @@ export async function updateEvent(
     }
   }
 
+  if (input.organizerUserId === null && event.status !== "draft") {
+    throw new ConflictError("A published event needs an organizer");
+  }
+
   if (input.organizerUserId) {
     await requireApprovedMember(
       event.clubId,
@@ -778,6 +801,10 @@ export async function setEventStatus(
 
     if (event.startsAt.getTime() <= Date.now()) {
       throw new ConflictError("Move the start time forward before publishing");
+    }
+
+    if (!event.organizerId) {
+      throw new ConflictError("Name an organizer before publishing");
     }
   }
 
@@ -1024,6 +1051,7 @@ export async function openCheckin(
 ): Promise<EventDetailDto> {
   const event = await loadEvent(actor.collegeId, slug);
   const membership = await requireEventManager(event, actor);
+  await requireNotCompeting(event.id, actor.id);
 
   if (event.status !== "published") {
     throw new ConflictError("Only a published event can open check-in");
@@ -1055,6 +1083,7 @@ export async function checkInRegistration(
 ): Promise<RegistrationDto> {
   const event = await loadEvent(actor.collegeId, slug);
   await requireEventManager(event, actor);
+  await requireNotCompeting(event.id, actor.id);
 
   if (!event.checkinOpenedAt) {
     throw new ConflictError("Open check-in before marking attendance");
@@ -1095,6 +1124,7 @@ export async function publishResults(
 ): Promise<EventDetailDto> {
   const event = await loadEvent(actor.collegeId, slug);
   const membership = await requireEventManager(event, actor);
+  await requireNotCompeting(event.id, actor.id);
 
   if (event.resultsPublishedAt) {
     throw new ConflictError("Results are already published");

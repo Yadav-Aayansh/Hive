@@ -44,6 +44,10 @@ export type EventCategory = (typeof EVENT_CATEGORIES)[number];
   `("starts_at" IS NOT NULL AND "ends_at" IS NOT NULL) OR "status" = 'draft'`,
 )
 @Check(
+  "chk_events_published_has_organizer",
+  `"organizer_id" IS NOT NULL OR "status" = 'draft'`,
+)
+@Check(
   "chk_events_checkin_not_draft",
   `"checkin_opened_at" IS NULL OR "status" <> 'draft'`,
 )
