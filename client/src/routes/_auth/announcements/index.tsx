@@ -8,7 +8,6 @@ import {
   isYesterday,
 } from "date-fns";
 import {
-  ArrowRightIcon,
   CalendarDaysIcon,
   MegaphoneIcon,
   PlusIcon,
@@ -31,7 +30,9 @@ import {
 import {
   GroupHeading,
   HexCrest,
+  HexPattern,
 } from "@/components/entity-kit";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -65,7 +66,7 @@ import {
 } from "@/lib/queries/announcements";
 import { clubsQueryOptions, type ClubDto } from "@/lib/queries/clubs";
 import { useMe } from "@/lib/queries/me";
-import { stretchedLinkClass } from "@/lib/utils";
+import { initials, stretchedLinkClass } from "@/lib/utils";
 
 const ALL = "all";
 
@@ -121,34 +122,42 @@ function AnnouncementCard({
   announcement: AnnouncementDto;
 }) {
   return (
-    <Card className="group/post relative flex flex-col gap-4 p-5 transition-shadow hover:shadow-lg">
-      <div className="flex items-center gap-3">
-        <HexCrest name={announcement.club.name} className="size-10" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
-            {announcement.club.name}
+    <Card className="group/post relative gap-0 p-0 py-0 transition-shadow hover:shadow-lg">
+      <HexPattern className="text-foreground/[0.04]" />
+
+      <div className="relative flex items-start gap-4 p-4">
+        <HexCrest name={announcement.club.name} className="size-12" />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="truncate font-heading text-entry">
+              {announcement.title}
+            </h3>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatDistanceToNow(new Date(announcement.createdAt), {
+                addSuffix: true,
+              })}
+            </span>
+          </div>
+
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {announcement.body}
           </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {announcement.author.fullName} ·{" "}
-            {formatDistanceToNow(new Date(announcement.createdAt), {
-              addSuffix: true,
-            })}
-          </p>
+
+          <div className="mt-2 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="shrink-0">{announcement.club.name}</span>
+            <span aria-hidden="true">·</span>
+            <Avatar className="size-4">
+              {announcement.author.avatarUrl ? (
+                <AvatarImage src={announcement.author.avatarUrl} alt="" />
+              ) : null}
+              <AvatarFallback className="text-[8px]">
+                {initials(announcement.author.fullName)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="truncate">{announcement.author.fullName}</span>
+          </div>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <h3 className="font-heading text-lg font-semibold text-foreground">
-          {announcement.title}
-        </h3>
-        <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-          {announcement.body}
-        </p>
-      </div>
-
-      <div className="mt-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary transition-transform group-hover/post:translate-x-0.5">
-        Read announcement
-        <ArrowRightIcon className="size-3.5" />
       </div>
 
       <Link
@@ -240,8 +249,8 @@ function AnnouncementsPage() {
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : isPending ? (
         <div className="flex flex-col gap-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-40 w-full rounded-2xl" />
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-24 w-full rounded-2xl" />
           ))}
         </div>
       ) : rows.length === 0 ? (
@@ -265,12 +274,14 @@ function AnnouncementsPage() {
                 title={group.label}
                 count={group.items.length}
               />
-              {group.items.map((announcement) => (
-                <AnnouncementCard
-                  key={announcement.id}
-                  announcement={announcement}
-                />
-              ))}
+              <div className="flex flex-col gap-3">
+                {group.items.map((announcement) => (
+                  <AnnouncementCard
+                    key={announcement.id}
+                    announcement={announcement}
+                  />
+                ))}
+              </div>
             </section>
           ))}
 

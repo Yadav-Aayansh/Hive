@@ -94,7 +94,8 @@ export function canRegister(user: UserDto, event: EventDto): boolean {
 export function registerBlock(user: UserDto, event: EventDto): string | null {
   if (!isStudent(user) || event.status !== "published") return null;
   if (!hasNoActiveSeat(event)) return null;
-  if (event.viewer.isOrganizer) return "You are organizing this event";
+  // The crown badge already reads "You lead" or "You organise" on both surfaces.
+  if (event.viewer.isOrganizer) return null;
   if (registrationClosed(event)) return "Registration closed";
   if (isEventFull(event)) return "Event full";
   return null;
